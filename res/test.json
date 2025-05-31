@@ -1,0 +1,13 @@
+{
+    "float" : -10.0,
+    "float2" : 10.0e-10,
+    "float3" : -10.0e2,
+    "int" : 1,
+    "int2" : -1,
+    "string" : "string",
+    "array" : [
+        true,
+        false,
+        null
+    ]
+}
