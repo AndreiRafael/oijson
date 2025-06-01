@@ -30,6 +30,12 @@ static int oijson_internal_is_hex_digit(const char c) {
     return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') ||(c >= 'a' && c <= 'f');
 }
 
+static const char* oijson_internal_consume_char(const char* itr, unsigned int* size) {
+    OIJSON_CHECK_ITR();
+    OIJSON_STEP_ITR();
+    return itr;
+}
+
 static const char* oijson_internal_consume_whitespace(const char* itr, unsigned int* size) {
     OIJSON_CHECK_ITR();
     while (*size && oijson_internal_is_whitespace(*itr)) {
@@ -110,9 +116,16 @@ static const char* oijson_internal_consume_string(const char* itr, unsigned int*
     return OIJSON_NULLCHAR;
 }
 
-static const char* oijson_internal_consume_number(const char* itr, unsigned int* size) {
+static const char* oijson_internal_consume_number_info(const char* itr, unsigned int* size, const char** out_integer, unsigned int* out_integer_size, const char** out_fraction, unsigned int* out_fraction_size, const char** out_exponent, unsigned int* out_exponent_size) {
     itr = oijson_internal_consume_whitespace(itr, size);
     OIJSON_CHECK_ITR();
+
+    if (out_integer) {
+        *out_integer = itr;
+        if (out_integer_size) {
+            *out_integer_size = *size;
+        }
+    }
 
     if (*itr == '-') {
         OIJSON_STEP_ITR();
@@ -134,6 +147,13 @@ static const char* oijson_internal_consume_number(const char* itr, unsigned int*
 
     if (*itr == '.') {// fraction
         OIJSON_STEP_ITR();
+        if (out_fraction) {
+            *out_fraction = itr;
+            if (out_fraction_size) {
+                *out_fraction_size = *size;
+            }
+        }
+
         if (!(*size) || !oijson_internal_is_digit(*itr)) {
             return OIJSON_NULLCHAR;
         }
@@ -146,6 +166,13 @@ static const char* oijson_internal_consume_number(const char* itr, unsigned int*
     if (*size && (*itr == 'e' || *itr == 'E')) {
         OIJSON_STEP_ITR();
         OIJSON_CHECK_ITR();
+        if (out_exponent) {
+            *out_exponent = itr;
+            if (out_exponent_size) {
+                *out_exponent_size = *size;
+            }
+        }
+
         if (*itr == '-' || *itr == '+') {
             OIJSON_STEP_ITR();
             OIJSON_CHECK_ITR();
@@ -160,6 +187,11 @@ static const char* oijson_internal_consume_number(const char* itr, unsigned int*
     }
     return itr;
 }
+
+static const char* oijson_internal_consume_number(const char* itr, unsigned int* size) {
+    return oijson_internal_consume_number_info(itr, size, 0, 0, 0, 0, 0, 0);
+}
+
 static const char* oijson_internal_consume_object(const char*, unsigned int*);
 static const char* oijson_internal_consume_array(const char*, unsigned int*);
 
@@ -279,14 +311,14 @@ static const char* oijson_internal_consume_array(const char* itr, unsigned int* 
 }
 
 oijson oijson_parse(const char* string, unsigned int string_size) {
-    const char* itr = oijson_internal_consume_whitespace(string, &string_size);
-    if (!itr) {
+    string = oijson_internal_consume_whitespace(string, &string_size);
+    if (!string) {
         return OIJSON_INVALID;
     }
 
     oijson out_json = {
-        .buffer = string,
-        .size = string_size,
+        .buffer = OIJSON_NULLCHAR,
+        .size = 0,
         .type = oijson_type_invalid
     };
 
@@ -314,6 +346,7 @@ oijson oijson_parse(const char* string, unsigned int string_size) {
         unsigned int temp_size = string_size;
         const char* itr = consume_functions[i](string, &temp_size);
         if (itr) {
+            out_json.buffer = string;
             out_json.size = string_size - temp_size;
             out_json.type = types[i];
             break;
@@ -323,14 +356,14 @@ oijson oijson_parse(const char* string, unsigned int string_size) {
 }
 
 
-unsigned int oijson_object_pairs_count(oijson object) {
+unsigned int oijson_object_count(oijson object) {
     if (object.type != oijson_type_object) {
         return 0;
     }
 
     unsigned int size = object.size;
     const char* itr = oijson_internal_consume_whitespace(object.buffer, &size);
-    itr++;
+    itr = oijson_internal_consume_char(itr, &size);// skip '{'
 
     unsigned int count = 0;
 
@@ -346,7 +379,7 @@ unsigned int oijson_object_pairs_count(oijson object) {
         if (!itr || *itr != ',') {
             break;
         }
-        itr++;
+        itr = oijson_internal_consume_char(itr, &size);// skip ','
     }
     return count;
 }
@@ -369,7 +402,7 @@ oijson oijson_object_value_by_name(oijson object, const char* name) {
 
     unsigned int size = object.size;
     const char* itr = oijson_internal_consume_whitespace(object.buffer, &size);
-    itr++;
+    itr = oijson_internal_consume_char(itr, &size);// skip '{'
 
     while (1) {
         const char* start;
@@ -389,7 +422,7 @@ oijson oijson_object_value_by_name(oijson object, const char* name) {
         if (*itr != ',') {
             break;
         }
-        itr++;
+        itr = oijson_internal_consume_char(itr, &size);// skip ','
     }
     return OIJSON_INVALID;
 }
@@ -401,7 +434,7 @@ oijson oijson_object_value_by_index(oijson object, unsigned int index) {
 
     unsigned int size = object.size;
     const char* itr = oijson_internal_consume_whitespace(object.buffer, &size);
-    itr++;
+    itr = oijson_internal_consume_char(itr, &size);// skip '{'
 
     while (1) {
         const char* value;
@@ -420,7 +453,7 @@ oijson oijson_object_value_by_index(oijson object, unsigned int index) {
         if (*itr != ',') {
             break;
         }
-        itr++;
+        itr = oijson_internal_consume_char(itr, &size);// skip ','
     }
     return OIJSON_INVALID;
 }
@@ -432,7 +465,7 @@ oijson oijson_object_name_by_index(oijson object, unsigned int index) {
 
     unsigned int size = object.size;
     const char* itr = oijson_internal_consume_whitespace(object.buffer, &size);
-    itr++;
+    itr = oijson_internal_consume_char(itr, &size);// skip '{'
 
     while (1) {
         if (!index) {
@@ -449,7 +482,268 @@ oijson oijson_object_name_by_index(oijson object, unsigned int index) {
         if (*itr != ',') {
             break;
         }
-        itr++;
+        itr = oijson_internal_consume_char(itr, &size);// skip ','
     }
     return OIJSON_INVALID;
+}
+
+
+unsigned int oijson_array_count(oijson array) {
+    if (array.type != oijson_type_array) {
+        return 0;
+    }
+
+    unsigned int size = array.size;
+    const char* itr = oijson_internal_consume_whitespace(array.buffer, &size);
+    itr = oijson_internal_consume_char(itr, &size);// skip '['
+
+    unsigned int count = 0;
+
+    while (1) {
+        itr = oijson_internal_consume_value(itr, &size);
+        if (!itr) {
+            break;
+        }
+
+        count++;
+
+        itr = oijson_internal_consume_whitespace(itr, &size);
+        if (!itr || *itr != ',') {
+            break;
+        }
+        itr = oijson_internal_consume_char(itr, &size);// skip ','
+    }
+    return count;
+}
+
+oijson oijson_array_value_by_index(oijson array, unsigned int index) {
+    if (array.type != oijson_type_array) {
+        return OIJSON_INVALID;
+    }
+
+    unsigned int size = array.size;
+    const char* itr = oijson_internal_consume_whitespace(array.buffer, &size);
+    itr = oijson_internal_consume_char(itr, &size);// skip '['
+
+    while (1) {
+        if (!index) {
+            return oijson_parse(itr, size);
+        }
+        index--;
+
+        itr = oijson_internal_consume_value(itr, &size);
+        if (!itr) {
+            break;
+        }
+
+        itr = oijson_internal_consume_whitespace(itr, &size);
+        if (*itr != ',') {
+            break;
+        }
+        itr = oijson_internal_consume_char(itr, &size);// skip ','
+    }
+    return OIJSON_INVALID;
+}
+
+
+static const char* oijson_internal_parse_ull(const char* string, unsigned int string_size, unsigned long long* out) {
+    string = oijson_internal_consume_whitespace(string, &string_size);
+    if(!string || !string_size) {
+        return OIJSON_NULLCHAR;
+    }
+
+    const char* ptr = string;
+    const char* start = ptr;//due to previous checks, start is guaranteed to be a number here
+    do {
+        ptr++;
+        string_size--;
+    } while (string_size && ptr[0] >= '0' && ptr[0] <= '9');
+    const char* end = ptr;
+
+    if(out) {
+        unsigned long long mul = 1;
+        *out = 0;
+        while(ptr != start) {
+            ptr--;
+            *out += mul * (unsigned long long)(*ptr - '0');
+            mul *= 10;
+        }
+    }
+
+    return end;
+}
+
+static const char* oijson_internal_parse_ll(const char* string, unsigned int string_size, long long* out) {
+    string = oijson_internal_consume_whitespace(string, &string_size);
+    if (!string || !string_size) {
+        return OIJSON_NULLCHAR;
+    }
+
+    int negative = *string == '-';
+    if (negative) {
+        string++;
+        string_size--;
+    }
+    unsigned long long ull;
+    const char* ptr = oijson_internal_parse_ull(string, string_size, &ull);
+    if(out) {
+        *out = (long long)ull;
+        if (negative) {
+            *out = -(*out);
+        }
+    }
+    return ptr;
+}
+
+int oijson_value_as_double(oijson value, double* out) {
+    if (value.type != oijson_type_number) {
+        return 0;
+    }
+
+    long long integer = 0;
+    unsigned long long fraction = 0;
+    unsigned long long fraction_digits = 0;
+    long long exponent = 0;
+
+    unsigned int size = value.size;
+    const char* integer_ptr = OIJSON_NULLCHAR;
+    unsigned int integer_size;
+    const char* fraction_ptr = OIJSON_NULLCHAR;
+    unsigned int fraction_size;
+    const char* exponent_ptr = OIJSON_NULLCHAR;
+    unsigned int exponent_size;
+    const char* ptr = oijson_internal_consume_number_info(value.buffer, &size, &integer_ptr, &integer_size, &fraction_ptr, &fraction_size, &exponent_ptr, &exponent_size);
+    if(!ptr) {
+        return 0;
+    }
+
+    if (out) {
+        if (!oijson_internal_parse_ll(integer_ptr, integer_size, &integer)) {
+            return 0;
+        }
+        *out = (double)integer;
+        if (fraction_ptr) {
+            if (!oijson_internal_parse_ull(fraction_ptr, fraction_size, &fraction)) {
+                return 0;
+            }
+            const char* ptr2 = fraction_ptr;
+            while (fraction_size && *ptr2 >= '0' && *ptr2 <= '9') {
+                fraction_digits++;
+                ptr2++;
+            }
+
+            double fraction_d = integer_ptr[0] == '-' ? -(double)fraction : (double)fraction;
+            while (fraction_digits) {
+                fraction_d /= 10.0;
+                fraction_digits--;
+            }
+            *out += fraction_d;
+        }
+        if (exponent_ptr) {
+            if (!oijson_internal_parse_ll(exponent_ptr, exponent_size, &exponent)) {
+                return 0;
+            }
+
+            while (exponent > 0) {
+                *out *= 10.0;
+                exponent--;
+            }
+            while (exponent < 0) {
+                *out /= 10.0;
+                exponent++;
+            }
+        }
+    }
+
+    return 1;
+}
+
+int oijson_value_as_float(oijson value, float* out) {
+    double d;
+    if (oijson_value_as_double(value, &d)) {
+        if (out) {
+            *out = (float)d;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+int oijson_value_as_long(oijson value, long* out) {
+    if (value.type != oijson_type_number) {
+        return 0;
+    }
+
+    long long integer = 0;
+    unsigned long long fraction = 0;
+    unsigned long long fraction_digits = 0;
+    long long exponent = 0;
+
+    unsigned int size = value.size;
+    const char* integer_ptr = OIJSON_NULLCHAR;
+    unsigned int integer_size;
+    const char* fraction_ptr = OIJSON_NULLCHAR;
+    unsigned int fraction_size;
+    const char* exponent_ptr = OIJSON_NULLCHAR;
+    unsigned int exponent_size;
+    const char* ptr = oijson_internal_consume_number_info(value.buffer, &size, &integer_ptr, &integer_size, &fraction_ptr, &fraction_size, &exponent_ptr, &exponent_size);
+    if(!ptr) {
+        return 0;
+    }
+
+    if (out) {
+        if (!oijson_internal_parse_ll(integer_ptr, integer_size, &integer)) {
+            return 0;
+        }
+        *out = (long)integer;
+        if (fraction_ptr) {
+            if (!oijson_internal_parse_ull(fraction_ptr, fraction_size, &fraction)) {
+                return 0;
+            }
+            const char* ptr2 = fraction_ptr;
+            while (fraction_size && *ptr2 >= '0' && *ptr2 <= '9') {
+                fraction_digits++;
+                ptr2++;
+            }
+
+            double fraction_d = integer_ptr[0] == '-' ? -(double)fraction : (double)fraction;
+            while (fraction_digits) {
+                fraction_d /= 10.0;
+                fraction_digits--;
+            }
+            if (fraction_d < -0.5) {
+                (*out)--;
+            }
+            else if (fraction_d > 0.5) {
+                (*out)++;
+            }
+        }
+        if (exponent_ptr) {
+            if (!oijson_internal_parse_ll(exponent_ptr, exponent_size, &exponent)) {
+                return 0;
+            }
+
+            while (exponent > 0) {
+                *out *= 10;
+                exponent--;
+            }
+            while (exponent < 0 && *out) {
+                *out /= 10;
+                exponent++;
+            }
+        }
+    }
+
+    return 1;
+}
+
+int oijson_value_as_int(oijson value, int* out) {
+    long l;
+    if (oijson_value_as_long(value, &l)) {
+        if (out) {
+            *out = (int)l;
+        }
+        return 1;
+    }
+    return 0;
 }

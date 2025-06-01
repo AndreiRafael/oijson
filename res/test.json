@@ -9,5 +9,9 @@
         true,
         false,
         null
-    ]
+    ],
+    "struct" : {
+        "name" : "John",
+        "age" : 32
+    }
 }
