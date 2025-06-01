@@ -12,14 +12,20 @@ typedef enum oijson_type_e {
     oijson_type_null,
 } oijson_type;
 
+typedef struct oijson_s {
+    const char* buffer;
+    unsigned int size;
+    oijson_type type;
+} oijson;
+
 const char* oijson_error(void);
 
-const char* oijson_parse(const char* json, oijson_type* out_type);
+oijson oijson_parse(const char* json, unsigned int json_size);
 
-unsigned int oijson_object_pairs_count(const char* object);
-const char* oijson_object_value_by_name(const char* object, const char* name);
-const char* oijson_object_name_by_index(const char* object, unsigned int index);
-const char* oijson_object_value_by_index(const char* object, unsigned int index);
+unsigned int oijson_object_pairs_count(oijson object);
+oijson oijson_object_value_by_name(oijson object, const char* name);
+oijson oijson_object_name_by_index(oijson object, unsigned int index);
+oijson oijson_object_value_by_index(oijson object, unsigned int index);
 
 unsigned int oijson_array_values_count(const char* array);
 const char* oijson_array_value_by_index(const char* array, unsigned int index);

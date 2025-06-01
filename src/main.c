@@ -26,16 +26,11 @@ const char* read_file(const char* path, char* buffer, unsigned int buffer_size) 
     return buffer;
 }
 
-void print_json(const char* json) {
-    oijson_type type;
-    const char* end = oijson_parse(json, &type);
-
-    if (!end) {
-        printf("ERROR");
-        return;
-    }
-
-    switch (type) {
+void print_json(oijson json) {
+    switch (json.type) {
+        case oijson_type_invalid:
+            puts("INVALID JSON!!\n");
+            return;
         case oijson_type_object:
             puts("object\n");
             break;
@@ -51,9 +46,8 @@ void print_json(const char* json) {
         default:
             break;
     }
-    while (json && end && json != end) {
-        putchar(*json);
-        json++;
+    for (unsigned int i = 0; i < json.size; i++) {
+        putchar(json.buffer[i]);
     }
     putchar('\n');
 }
@@ -63,10 +57,20 @@ int main(int argc, char* argv[]) {
     (void)argv;
 
     char buf[2048];
-    const char* json = read_file("./res/test.json", buf, 2048);
-    print_json(json);
-    print_json(oijson_object_value_by_name(json, "float3"));
-    print_json(oijson_object_value_by_name(json, "float4"));
+    const char* file = read_file("./res/test.json", buf, 2048);
+    oijson json = oijson_parse(file, 2048);
+    if (json.type != oijson_type_invalid) {
+        print_json(json);
+        print_json(oijson_object_value_by_name(json, "float3"));
+        print_json(oijson_object_value_by_name(json, "float4"));
 
+        print_json(oijson_object_value_by_index(json, 6));
+
+        printf("object pairs: %d\n", oijson_object_pairs_count(json));
+    }
+    oijson json2 = oijson_parse("0", 1);
+    print_json(json2);
+    oijson json3 = oijson_parse("\"test\"", 5);
+    print_json(json3);
     return 0;
 }
