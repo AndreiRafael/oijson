@@ -547,6 +547,85 @@ oijson oijson_array_value_by_index(oijson array, unsigned int index) {
 }
 
 
+static int oijson_internal_push_char(char** buffer_ptr, unsigned int* buffer_size_ptr, char c) {
+    if (*buffer_size_ptr) {
+        **buffer_ptr = c;
+        (*buffer_ptr)++;
+        (*buffer_size_ptr)--;
+        return 1;
+    }
+    return 0;
+}
+
+static const char* oijson_internal_parse_char(const char* string, unsigned int* string_size_ptr, char** out_ptr, unsigned int* out_size_ptr) {
+    if (!string || !(*string_size_ptr)) {
+        return OIJSON_NULLCHAR;
+    }
+
+    const char escape_table[][2] = {
+        { '\"', '\"' },
+        { '\\', '\\' },
+        { '/', '/' },
+        { 'b', '\b' },
+        { 'f', '\f' },
+        { 'n', '\n' },
+        { 'r', '\r' },
+        { 't', '\t' },
+    };
+    int escape_table_len = sizeof(escape_table) / sizeof(escape_table[0]);
+
+    switch (*string) {
+        case '\\':// escaped character
+            string++;
+            (*string_size_ptr)--;
+            if (!(*string_size_ptr)) {
+                return OIJSON_NULLCHAR;
+            }
+            switch (*string) {
+                case 'u':// TODO: unicode to utf8
+                    break;
+                default:
+                    for (int i = 0; i < escape_table_len; i++) {
+                        if (*string == escape_table[i][0]) {
+                            if (!oijson_internal_push_char(out_ptr, out_size_ptr, escape_table[i][1])) {
+                                return OIJSON_NULLCHAR;
+                            }
+                        }
+                    }
+            }
+            break;
+        case '\0':
+            return OIJSON_NULLCHAR;
+        case '\"':
+            break;
+        default:
+            if (!oijson_internal_push_char(out_ptr, out_size_ptr, *string)) {
+                return OIJSON_NULLCHAR;
+            }
+            break;
+    }
+    string++;
+    (*string_size_ptr)--;
+    return string;
+}
+
+int oijson_value_as_string(oijson value, char* out, unsigned int out_size) {
+    if (value.type != oijson_type_string) {
+        return 0;
+    }
+
+    const char* itr = value.buffer + 1;
+    unsigned int size = value.size - 1;
+    do {
+        itr = oijson_internal_parse_char(itr, &size, &out, &out_size);
+    } while (itr);
+    if (out_size) {
+        *out = '\0';
+        return 1;
+    }
+    return 0;
+}
+
 static const char* oijson_internal_parse_ull(const char* string, unsigned int string_size, unsigned long long* out) {
     string = oijson_internal_consume_whitespace(string, &string_size);
     if(!string || !string_size) {

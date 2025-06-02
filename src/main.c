@@ -136,6 +136,38 @@ static void test_long(const char* value) {
     }
 }
 
+static int test_string(const char* string, const char* expected, char* buffer, unsigned int buffer_size) {
+    puts("STRING TEST");
+    printf("input: %s -> expected: %s -> got: ", string, expected);
+    oijson json = oijson_parse(string, string_length(string));
+    if (json.type != oijson_type_invalid) {
+        if (oijson_value_as_string(json, buffer, buffer_size)) {
+            puts(buffer);
+            while (*buffer && *expected && *buffer == *expected) {
+                buffer++;
+                expected++;
+            }
+            return !(*buffer) && !(*expected);
+        }
+        else {
+            printf("COULD NOT CONVERT TO STRING (%s)", string);
+        }
+    }
+    else {
+        puts("INVALID JSON");
+    }
+    return 0;
+}
+
+void check_test(int test_result, int expected_result) {
+    printf("test returned %d, and %d was expected ", test_result, expected_result);
+    if (test_result == expected_result) {
+        puts("[PASSED]");
+        return;
+    }
+    puts("[FAILED]");
+}
+
 int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
@@ -188,5 +220,15 @@ int main(int argc, char* argv[]) {
     test_long("-19.5e-1");
     test_long("19.51e-1");
     test_long("-19.51e-1");
+
+    {
+        char string[10];
+        check_test(test_string("\"ab\\nc\"", "ab\nc", string, 10), 1);// success - c is printed in newline
+        check_test(test_string("\"ab\\nc\"", "ab\nc", string, 4), 0);// fails - no space for null terminator
+        
+        check_test(test_string("\"\\u002F\"", "/", string, 5), 1);// success - prints /
+        check_test(test_string("\"/\"", "/", string, 5), 1);// success - prints /
+        check_test(test_string("\"\\/\"", "/", string, 5), 1);// success - prints /
+    }
     return 0;
 }
