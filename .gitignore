@@ -51,3 +51,6 @@ _deps
 # Ninja
 .ninja_deps
 .ninja_log
+
+# Clang cache
+.cache

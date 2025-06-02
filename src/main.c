@@ -1,6 +1,4 @@
 #include <stdio.h>
-#include <string.h>
-
 #include "oijson.h"
 
 const char* read_file(const char* path, char* buffer, unsigned int buffer_size) {

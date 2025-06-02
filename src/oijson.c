@@ -99,6 +99,7 @@ static const char* oijson_internal_consume_string(const char* itr, unsigned int*
                             }
                             OIJSON_STEP_ITR();
                         }
+                        break;
                     default:
                         return OIJSON_NULLCHAR;// error, invalid character
                 }
