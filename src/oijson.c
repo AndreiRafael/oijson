@@ -421,7 +421,7 @@ oijson oijson_object_value_by_name(oijson object, const char* name) {
         }
 
         itr = oijson_internal_consume_whitespace(itr, &size);
-        if (*itr != ',') {
+        if (!itr || *itr != ',') {
             break;
         }
         itr = oijson_internal_consume_char(itr, &size);// skip ','
@@ -452,7 +452,7 @@ oijson oijson_object_value_by_index(oijson object, unsigned int index) {
         index--;
 
         itr = oijson_internal_consume_whitespace(itr, &size);
-        if (*itr != ',') {
+        if (!itr || *itr != ',') {
             break;
         }
         itr = oijson_internal_consume_char(itr, &size);// skip ','
@@ -481,7 +481,7 @@ oijson oijson_object_name_by_index(oijson object, unsigned int index) {
         }
 
         itr = oijson_internal_consume_whitespace(itr, &size);
-        if (*itr != ',') {
+        if (!itr || *itr != ',') {
             break;
         }
         itr = oijson_internal_consume_char(itr, &size);// skip ','
@@ -539,7 +539,7 @@ oijson oijson_array_value_by_index(oijson array, unsigned int index) {
         }
 
         itr = oijson_internal_consume_whitespace(itr, &size);
-        if (*itr != ',') {
+        if (!itr || *itr != ',') {
             break;
         }
         itr = oijson_internal_consume_char(itr, &size);// skip ','
@@ -589,11 +589,10 @@ static int oijson_internal_unicode_to_utf8(char** buffer_ptr, unsigned int* buff
     if (*buffer_size_ptr < (unsigned int)required_bytes) {
         return 0;
     }
-    *buffer_size_ptr -= required_bytes;
 
     unsigned int shift = 0;
     for(int i = required_bytes - 1; i >= 0; i--) {
-        char* byte_ptr = *buffer_ptr;
+        char* byte_ptr = *buffer_ptr + i;
         *byte_ptr = 0;
         if(required_bytes > 1) {// set initial string bits
             if (i == 0) {
@@ -611,8 +610,9 @@ static int oijson_internal_unicode_to_utf8(char** buffer_ptr, unsigned int* buff
             *byte_ptr |= (((codepoint >> shift) & 1) << b);
             shift++;
         }
-        (*buffer_ptr)++;
     }
+    (*buffer_ptr) += required_bytes;
+    *buffer_size_ptr -= required_bytes;
     return 1;
 }
 
@@ -702,6 +702,7 @@ static const char* oijson_internal_parse_char(const char* string, unsigned int* 
                             if (!oijson_internal_push_char(out_ptr, out_size_ptr, escape_table[i][1])) {
                                 return OIJSON_NULLCHAR;
                             }
+                            break;
                         }
                     }
             }
