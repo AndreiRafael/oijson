@@ -557,6 +557,18 @@ static int oijson_internal_push_char(char** buffer_ptr, unsigned int* buffer_siz
     return 0;
 }
 
+static unsigned int oijson_internal_bytes_to_uint(char bytes[4]) {
+    char* c = (char*)((unsigned int[]){ 1ul });
+    if (c[0]) {
+        for (int i = 0; i < 2; i++) {
+            char temp = bytes[i];
+            bytes[i] = bytes[3 - i];
+            bytes[3 - i] = temp;
+        }
+    }
+    return *((unsigned int*)bytes);
+}
+
 static const char* oijson_internal_parse_char(const char* string, unsigned int* string_size_ptr, char** out_ptr, unsigned int* out_size_ptr) {
     if (!string || !(*string_size_ptr)) {
         return OIJSON_NULLCHAR;
@@ -583,7 +595,19 @@ static const char* oijson_internal_parse_char(const char* string, unsigned int* 
             }
             switch (*string) {
                 case 'u':// TODO: unicode to utf8
+                {
+                    string++;
+                    (*string_size_ptr)--;
+                    char unicode[4];                  
+                    for (int i = 0; i < 4; i++) {
+                        if (!(*string_size_ptr) || !oijson_internal_is_hex_digit(*string)) {
+                            return OIJSON_NULLCHAR;
+                        }
+                        unicode[i] = *string;
+                        (*string_size_ptr)--;
+                    }
                     break;
+                }
                 default:
                     for (int i = 0; i < escape_table_len; i++) {
                         if (*string == escape_table[i][0]) {
