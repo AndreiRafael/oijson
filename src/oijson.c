@@ -389,6 +389,7 @@ static int oijson_internal_check_value(const char* start, const char* end, const
     start++;
     end--;
 
+    // TODO: check with unicode!!
     while(*start && *name && *start == *name) {
         start++;
         name++;
@@ -557,16 +558,92 @@ static int oijson_internal_push_char(char** buffer_ptr, unsigned int* buffer_siz
     return 0;
 }
 
-static unsigned int oijson_internal_bytes_to_uint(char bytes[4]) {
-    char* c = (char*)((unsigned int[]){ 1ul });
-    if (c[0]) {
-        for (int i = 0; i < 2; i++) {
-            char temp = bytes[i];
-            bytes[i] = bytes[3 - i];
-            bytes[3 - i] = temp;
+static int oijson_internal_utf16_to_codepoint(char utf16[4], unsigned long* out) {
+    *out = 0;
+    int shift = 0;
+    for (int i = 1; i >= 0; i--) {
+        for (int j = 0; j < 8; j++) {
+            (*out) |= ((utf16[i * 2 + 1] >> j) & 1) << shift;
+            shift++;
+        }
+        for (int j = 0; j < 2; j++) {
+            (*out) |= ((utf16[i * 2] >> j) & 1) << shift;
+            shift++;
         }
     }
-    return *((unsigned int*)bytes);
+    if (utf16[0] || utf16[1]) {// TODO: correctly validade utf16 surrogate pair
+        (*out) += 0x10000;
+    }
+    return 1;
+}
+
+static int oijson_internal_unicode_to_utf8(char** buffer_ptr, unsigned int* buffer_size_ptr, unsigned long codepoint) {
+    int required_bits = 0;
+    for(int i = 0; i < (int)(sizeof(unsigned long) * 8); i++) {
+        if((codepoint >> i) & 1) {
+            required_bits = i + 1;
+        }
+    }
+
+    int required_bytes = required_bits <= 7 ? 1 : (required_bits <= 11 ? 2 : (required_bits <= 16 ? 3 : 4));
+    if (*buffer_size_ptr < (unsigned int)required_bytes) {
+        return 0;
+    }
+    *buffer_size_ptr -= required_bytes;
+
+    unsigned int shift = 0;
+    for(int i = required_bytes - 1; i >= 0; i--) {
+        char* byte_ptr = *buffer_ptr;
+        *byte_ptr = 0;
+        if(required_bytes > 1) {// set initial string bits
+            if (i == 0) {
+                for(unsigned int b = 0; b < (unsigned int)required_bytes; b++) {
+                    *byte_ptr |= 1 << (7 - b);
+                }
+            }
+            else {// set continuation bits
+                *byte_ptr |= 1 << 7;
+            }
+        }
+
+        int num_bits = required_bytes == 1 ? 7 : (i == 0 ? 7 - required_bytes : 6);
+        for(int b = 0; b < num_bits; b++) {
+            *byte_ptr |= (((codepoint >> shift) & 1) << b);
+            shift++;
+        }
+        (*buffer_ptr)++;
+    }
+    return 1;
+}
+
+static char oijson_internal_hex_value(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'A' && c <= 'F') {
+        return (c - 'A') + 10;
+    }
+    return (c - 'a') + 10;
+}
+
+static int escaped_unicode_to_bytes(const char** itr_ptr, unsigned int* size_ptr, char* bytes, int offset) {
+    for (int i = offset * 2; i < (offset * 2) + 4; i++) {
+        if (i % 2 == 0) {
+            bytes[i / 2] = 0;
+        }
+
+        if (!(*size_ptr) || !oijson_internal_is_hex_digit(**itr_ptr)) {
+            return 0;
+        }
+        char v = oijson_internal_hex_value(**itr_ptr);
+        if ((i % 2) == 0) {
+            v = v << 4;
+        }
+        bytes[i / 2] |= v;
+        (*size_ptr)--;
+        (*itr_ptr)++;
+    }
+    return 1;
 }
 
 static const char* oijson_internal_parse_char(const char* string, unsigned int* string_size_ptr, char** out_ptr, unsigned int* out_size_ptr) {
@@ -594,17 +671,28 @@ static const char* oijson_internal_parse_char(const char* string, unsigned int* 
                 return OIJSON_NULLCHAR;
             }
             switch (*string) {
-                case 'u':// TODO: unicode to utf8
+                case 'u':
                 {
                     string++;
                     (*string_size_ptr)--;
-                    char unicode[4];                  
-                    for (int i = 0; i < 4; i++) {
-                        if (!(*string_size_ptr) || !oijson_internal_is_hex_digit(*string)) {
-                            return OIJSON_NULLCHAR;
+                    char bytes[4] = { 0, 0, 0, 0};
+                    if (!escaped_unicode_to_bytes(&string, string_size_ptr, bytes, 2)) {
+                        return OIJSON_NULLCHAR;
+                    }
+                    if (*string_size_ptr >= 2) {// check sequential escaped 'u'
+                        if (string[0] == '\\' && string[1] == 'u') {
+                            string += 2;
+                            (string_size_ptr) -= 2;
+                            bytes[0] = bytes[2];
+                            bytes[1] = bytes[3];
+                            if (!escaped_unicode_to_bytes(&string, string_size_ptr, bytes, 2)) {
+                                return OIJSON_NULLCHAR;
+                            }
                         }
-                        unicode[i] = *string;
-                        (*string_size_ptr)--;
+                    }
+                    unsigned long codepoint;
+                    if (!oijson_internal_utf16_to_codepoint(bytes, &codepoint) || !oijson_internal_unicode_to_utf8(out_ptr, out_size_ptr, codepoint)) {
+                        return OIJSON_NULLCHAR;
                     }
                     break;
                 }

@@ -225,10 +225,12 @@ int main(int argc, char* argv[]) {
         char string[10];
         check_test(test_string("\"ab\\nc\"", "ab\nc", string, 10), 1);// success - c is printed in newline
         check_test(test_string("\"ab\\nc\"", "ab\nc", string, 4), 0);// fails - no space for null terminator
-        
+
         check_test(test_string("\"\\u002F\"", "/", string, 5), 1);// success - prints /
         check_test(test_string("\"/\"", "/", string, 5), 1);// success - prints /
         check_test(test_string("\"\\/\"", "/", string, 5), 1);// success - prints /
+
+        check_test(test_string("\"\\uD834\\uDD1E\"", "𝄞", string, 10), 1);
     }
     return 0;
 }
