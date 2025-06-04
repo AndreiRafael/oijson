@@ -150,12 +150,11 @@ static int test_string(const char* string, const char* expected, char* buffer, u
             return !(*buffer) && !(*expected);
         }
         else {
-            printf("COULD NOT CONVERT TO STRING (%s)", string);
+            printf("COULD NOT CONVERT TO STRING (%s)\n", string);
+            return -1;
         }
     }
-    else {
-        puts("INVALID JSON");
-    }
+    puts("INVALID JSON");
     return 0;
 }
 
@@ -231,6 +230,7 @@ int main(int argc, char* argv[]) {
         check_test(test_string("\"\\/\"", "/", string, 5), 1);// success - prints /
 
         check_test(test_string("\"\\uD834\\uDD1E\"", "𝄞", string, 10), 1);
+        check_test(test_string("\"\\udead\"", "invalid escaped unicode", string, 10), -1);// should error because of invalid escaped unicode
     }
     return 0;
 }
