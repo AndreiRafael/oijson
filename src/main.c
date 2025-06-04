@@ -149,10 +149,6 @@ static int test_string(const char* string, const char* expected, char* buffer, u
             }
             return !(*buffer) && !(*expected);
         }
-        else {
-            puts(oijson_error());
-            return -1;
-        }
     }
     puts(oijson_error());
     return 0;
@@ -179,7 +175,7 @@ int main(int argc, char* argv[]) {
     char buf[2048];
     {
         const char* file = read_file("./res/test.json", buf, 2048);
-        oijson json = oijson_parse(file, 2048);
+        oijson json = oijson_parse(file, string_length(file));
         if (json.type != oijson_type_invalid) {
             print_json(json);
             print_json(oijson_object_value_by_name(json, "float3"));
@@ -196,7 +192,7 @@ int main(int argc, char* argv[]) {
     }
     {
         const char* file = read_file("./res/test2.json", buf, 2048);
-        oijson json = oijson_parse(file, 2048);
+        oijson json = oijson_parse(file, string_length(file));
         if (json.type != oijson_type_invalid) {
             print_json(json);
             print_json(oijson_object_value_by_name(json, "glossary"));
@@ -228,17 +224,17 @@ int main(int argc, char* argv[]) {
     {
         char string[10];
         check_test(test_string("\"ab\\nc\"", "ab\nc", string, 10), 1);// success - c is printed in newline
-        check_test(test_string("\"ab\\nc\"", "buffer too small", string, 4), -1);// fails - no space for null terminator
+        check_test(test_string("\"ab\\nc\"", "buffer too small", string, 4), 0);// fails - no space for null terminator
 
         check_test(test_string("\"\\u002F\"", "/", string, 5), 1);// success - prints /
         check_test(test_string("\"/\"", "/", string, 5), 1);// success - prints /
         check_test(test_string("\"\\/\"", "/", string, 5), 1);// success - prints /
 
         check_test(test_string("\"\\uD834\\uDD1E\"", "𝄞", string, 10), 1);
-        check_test(test_string("\"\\udead\"", "invalid escaped unicode", string, 10), -1);// should error because of invalid escaped unicode
-        check_test(test_string("\"\\uffff\\uffff\"", "invalid escaped unicode", string, 10), -1);// should error because of invalid escaped unicode
-        check_test(test_string("\"\\\n\"", "invalid escaped control character", string, 10), 0);// should error because of invalid escaped unicode
-        check_test(test_string("\"\n\"", "unescaped control character", string, 10), 0);// should error because of invalid escaped unicode
+        check_test(test_string("\"\\udead\"", "invalid escaped unicode", string, 10), 0);// should fail because of invalid escaped unicode
+        check_test(test_string("\"\\uffff\\uffff\"", "invalid escaped unicode", string, 10), 0);// should fail because of invalid escaped unicode
+        check_test(test_string("\"\\\n\"", "invalid escaped control character", string, 10), 0);// should fail because of invalid escaped unicode
+        check_test(test_string("\"\n\"", "unescaped control character", string, 10), 0);// should fail because of invalid escaped unicode
 
         printf("\nTEST RESULTS: %.2d/%.2d passed(%d failed)", tests_passed, tests_count, tests_count - tests_passed);
     }

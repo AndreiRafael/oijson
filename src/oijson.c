@@ -79,6 +79,222 @@ static const char* oijson_internal_consume_null(const char* itr, unsigned int* s
     return oijson_internal_consume_keyword(itr, size, "null");
 }
 
+static int oijson_internal_push_char(char** buffer_ptr, unsigned int* buffer_size_ptr, char c) {
+    if (*buffer_size_ptr) {
+        **buffer_ptr = c;
+        (*buffer_ptr)++;
+        (*buffer_size_ptr)--;
+        return 1;
+    }
+    oijson_internal_error_set("buffer too small");
+    return 0;
+}
+
+static int oijson_internal_utf16_to_codepoint(unsigned char utf16[4], unsigned long* out) {
+    if (utf16[0] || utf16[1])// TODO: check rfc to correctly handle invalid escape sequences
+    {
+        if ((utf16[0] & 0xfc) != 0xd8 || (utf16[2] & 0xfc) != 0xdc) {//invalid surrogate pair
+            oijson_internal_error_set("invalid escaped unicode");
+            return 0;
+        }
+    }
+    else if (utf16[2] >= 0xd8 && utf16[2] < 0xe0) {// invalid codepoint range
+        oijson_internal_error_set("invalid escaped unicode");
+        return 0;
+    }
+
+    *out = 0;
+    int shift = 0;
+    for (int i = 1; i >= 0; i--) {
+        for (int j = 0; j < 8; j++) {
+            *out |= (unsigned int)(((utf16[i * 2 + 1] >> j) & 1) << shift);
+            shift++;
+        }
+        for (int j = 0; j < 2; j++) {
+            *out |= (unsigned int)(((utf16[i * 2] >> j) & 1) << shift);
+            shift++;
+        }
+    }
+    if (utf16[0]) {
+        *out += 0x10000;
+    }
+    return 1;
+}
+
+static int oijson_internal_unicode_to_utf8(char** buffer_ptr, unsigned int* buffer_size_ptr, unsigned long codepoint) {
+    int required_bits = 0;
+    for(int i = 0; i < (int)(sizeof(unsigned long) * 8); i++) {
+        if((codepoint >> i) & 1) {
+            required_bits = i + 1;
+        }
+    }
+
+    unsigned int required_bytes = required_bits <= 7 ? 1 : (required_bits <= 11 ? 2 : (required_bits <= 16 ? 3 : 4));
+    if (*buffer_size_ptr < (unsigned int)required_bytes) {
+        oijson_internal_error_set("buffer too small");
+        return 0;
+    }
+
+    unsigned int shift = 0;
+    for(int i = (int)required_bytes - 1; i >= 0; i--) {
+        char* byte_ptr = *buffer_ptr + i;
+        *byte_ptr = 0;
+        if(required_bytes > 1) {// set initial string bits
+            if (i == 0) {
+                for(unsigned int b = 0; b < (unsigned int)required_bytes; b++) {
+                    *byte_ptr |= 1 << (7 - b);
+                }
+            }
+            else {// set continuation bits
+                *byte_ptr |= 1 << 7;
+            }
+        }
+
+        unsigned int num_bits = required_bytes == 1 ? 7 : (i == 0 ? 7 - required_bytes : 6);
+        for(unsigned int b = 0; b < num_bits; b++) {
+            *byte_ptr |= (((codepoint >> shift) & 1) << b);
+            shift++;
+        }
+    }
+    (*buffer_ptr) += required_bytes;
+    *buffer_size_ptr -= required_bytes;
+    return 1;
+}
+
+static char oijson_internal_hex_value(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'A' && c <= 'F') {
+        return (c - 'A') + 10;
+    }
+    return (c - 'a') + 10;
+}
+
+static int escaped_unicode_to_bytes(const char** itr_ptr, unsigned int* size_ptr, unsigned char* bytes, int offset) {
+    for (int i = offset * 2; i < (offset * 2) + 4; i++) {
+        if (i % 2 == 0) {
+            bytes[i / 2] = 0;
+        }
+
+        if (!(*size_ptr) || !oijson_internal_is_hex_digit(**itr_ptr)) {
+            return 0;
+        }
+        char v = oijson_internal_hex_value(**itr_ptr);
+        if ((i % 2) == 0) {
+            v <<= 4;
+        }
+        bytes[i / 2] |= v;
+        (*size_ptr)--;
+        (*itr_ptr)++;
+    }
+    return 1;
+}
+
+static int oijson_internal_validate_utf8(const char* itr, unsigned int size) {
+    if (!itr) {
+        oijson_internal_error_set("invalid utf-8");
+        return 0;
+    }
+
+    unsigned int bytes_count = 1;
+    for (int i = 0; i < 4; i++) {
+        char c = *itr;
+        if (!((c >> (7 - i)) & 1)) {
+            break;
+        }
+        bytes_count++;
+    }
+    if (bytes_count > 4 || size < bytes_count) {
+        oijson_internal_error_set("invalid utf-8");
+        return 0;
+    }
+
+    for (unsigned int i = 1; i < bytes_count; i++) {// check continuations
+        unsigned char c = (unsigned char)itr[i];
+        if ((c & 0xc0) != 0x80) {
+            oijson_internal_error_set("invalid utf-8");
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static const char* oijson_internal_parse_char(const char* itr, unsigned int* size, char** out_ptr, unsigned int* out_size_ptr) {
+    OIJSON_CHECK_ITR();
+    if (!oijson_internal_validate_utf8(itr, *size)) {
+        return OIJSON_NULLCHAR;
+    }
+
+    const char escape_table[][2] = {
+        { '\"', '\"' },
+        { '\\', '\\' },
+        { '/', '/' },
+        { 'b', '\b' },
+        { 'f', '\f' },
+        { 'n', '\n' },
+        { 'r', '\r' },
+        { 't', '\t' },
+    };
+    int escape_table_len = sizeof(escape_table) / sizeof(escape_table[0]);
+
+    switch (*itr) {
+        case '\\':// escaped character
+            OIJSON_STEP_ITR();
+            OIJSON_CHECK_ITR();
+            switch (*itr) {
+                case 'u':
+                {
+                    OIJSON_STEP_ITR();
+                    unsigned char bytes[4] = { 0, 0, 0, 0};
+                    if (!escaped_unicode_to_bytes(&itr, size, bytes, 2)) {
+                        return OIJSON_NULLCHAR;
+                    }
+                    if (*size >= 2) {// check sequential escaped 'u'
+                        if (itr[0] == '\\' && itr[1] == 'u') {
+                            itr += 2;
+                            (*size) -= 2;
+                            bytes[0] = bytes[2];
+                            bytes[1] = bytes[3];
+                            if (!escaped_unicode_to_bytes(&itr, size, bytes, 2)) {
+                                return OIJSON_NULLCHAR;
+                            }
+                        }
+                    }
+                    unsigned long codepoint;
+                    if (!oijson_internal_utf16_to_codepoint(bytes, &codepoint) || (out_ptr && !oijson_internal_unicode_to_utf8(out_ptr, out_size_ptr, codepoint))) {
+                        return OIJSON_NULLCHAR;
+                    }
+                    break;
+                }
+                default:
+                    for (int i = 0; i < escape_table_len; i++) {
+                        if (*itr == escape_table[i][0]) {
+                            if (out_ptr && !oijson_internal_push_char(out_ptr, out_size_ptr, escape_table[i][1])) {
+                                return OIJSON_NULLCHAR;
+                            }
+                            OIJSON_STEP_ITR();
+                            return itr;
+                        }
+                    }
+                    oijson_internal_error_set("invalid escaped control character");
+                    return OIJSON_NULLCHAR;
+            }
+            break;
+        default:
+            if (*itr >= 0x00 && *itr < 0x1f) {
+                oijson_internal_error_set("unescaped control character");
+                return OIJSON_NULLCHAR;
+            }
+            if (out_ptr && !oijson_internal_push_char(out_ptr, out_size_ptr, *itr)) {
+                return OIJSON_NULLCHAR;
+            }
+            OIJSON_STEP_ITR();
+            break;
+    }
+    return itr;
+}
+
 static const char* oijson_internal_consume_string(const char* itr, unsigned int* size) {
     itr = oijson_internal_consume_whitespace(itr, size);
     OIJSON_CHECK_ITR();
@@ -87,51 +303,15 @@ static const char* oijson_internal_consume_string(const char* itr, unsigned int*
         return OIJSON_NULLCHAR;
     }
     OIJSON_STEP_ITR();
-    while (*size) {
-        switch (*itr) {
-            case '\\':
-                OIJSON_STEP_ITR();
-                OIJSON_CHECK_ITR();
-                switch(*itr) {
-                    case '\"':
-                    case '\\':
-                    case '/':
-                    case 'b':
-                    case 'f':
-                    case 'n':
-                    case 'r':
-                    case 't':
-                        OIJSON_STEP_ITR();
-                        break;
-                    case 'u':
-                        OIJSON_STEP_ITR();
-                        for (int i = 0; i < 4; i++) {
-                            OIJSON_CHECK_ITR();
-                            if (!oijson_internal_is_hex_digit(*itr)) {
-                                oijson_internal_error_set("invalid unicode escape sequence");
-                                return OIJSON_NULLCHAR;
-                            }
-                            OIJSON_STEP_ITR();
-                        }
-                        break;
-                    default:
-                        oijson_internal_error_set("invalid escaped control character");
-                        return OIJSON_NULLCHAR;
-                }
-                break;
-            case '\"':
-                OIJSON_STEP_ITR();
-                return itr;
-            default:
-                if (*itr >= 0 && *itr <= 0x1f) {
-                    oijson_internal_error_set("unescaped control character");
-                    return OIJSON_NULLCHAR;
-                }
-                OIJSON_STEP_ITR();
-                break;
+    OIJSON_CHECK_ITR();
+    while (*itr != '\"') {
+        itr = oijson_internal_parse_char(itr, size, 0, 0);
+        if (!itr) {
+            return OIJSON_NULLCHAR;
         }
     }
-    return OIJSON_NULLCHAR;
+    OIJSON_STEP_ITR();
+    return itr;
 }
 
 static const char* oijson_internal_consume_number_info(const char* itr, unsigned int* size, const char** out_integer, unsigned int* out_integer_size, const char** out_fraction, unsigned int* out_fraction_size, const char** out_exponent, unsigned int* out_exponent_size) {
@@ -564,191 +744,6 @@ oijson oijson_array_value_by_index(oijson array, unsigned int index) {
         itr = oijson_internal_consume_char(itr, &size);// skip ','
     }
     return OIJSON_INVALID;
-}
-
-
-static int oijson_internal_push_char(char** buffer_ptr, unsigned int* buffer_size_ptr, char c) {
-    if (*buffer_size_ptr) {
-        **buffer_ptr = c;
-        (*buffer_ptr)++;
-        (*buffer_size_ptr)--;
-        return 1;
-    }
-    oijson_internal_error_set("buffer too small");
-    return 0;
-}
-
-static int oijson_internal_utf16_to_codepoint(unsigned char utf16[4], unsigned long* out) {
-    if (utf16[0] || utf16[1])// TODO: check rfc to correctly handle invalid escape sequences
-    {
-        if ((utf16[0] & 0xfc) != 0xd8 || (utf16[2] & 0xfc) != 0xdc) {//invalid surrogate pair
-            oijson_internal_error_set("invalid utf-16 surrogate pair");
-            return 0;
-        }
-    }
-    else if (utf16[2] >= 0xd8 && utf16[2] < 0xe0) {// invalid codepoint range
-        oijson_internal_error_set("invalid utf-16 unpaired surrogate");
-        return 0;
-    }
-
-    *out = 0;
-    int shift = 0;
-    for (int i = 1; i >= 0; i--) {
-        for (int j = 0; j < 8; j++) {
-            *out |= (unsigned int)(((utf16[i * 2 + 1] >> j) & 1) << shift);
-            shift++;
-        }
-        for (int j = 0; j < 2; j++) {
-            *out |= (unsigned int)(((utf16[i * 2] >> j) & 1) << shift);
-            shift++;
-        }
-    }
-    if (utf16[0]) {
-        *out += 0x10000;
-    }
-    return 1;
-}
-
-static int oijson_internal_unicode_to_utf8(char** buffer_ptr, unsigned int* buffer_size_ptr, unsigned long codepoint) {
-    int required_bits = 0;
-    for(int i = 0; i < (int)(sizeof(unsigned long) * 8); i++) {
-        if((codepoint >> i) & 1) {
-            required_bits = i + 1;
-        }
-    }
-
-    unsigned int required_bytes = required_bits <= 7 ? 1 : (required_bits <= 11 ? 2 : (required_bits <= 16 ? 3 : 4));
-    if (*buffer_size_ptr < (unsigned int)required_bytes) {
-        oijson_internal_error_set("buffer too small");
-        return 0;
-    }
-
-    unsigned int shift = 0;
-    for(int i = (int)required_bytes - 1; i >= 0; i--) {
-        char* byte_ptr = *buffer_ptr + i;
-        *byte_ptr = 0;
-        if(required_bytes > 1) {// set initial string bits
-            if (i == 0) {
-                for(unsigned int b = 0; b < (unsigned int)required_bytes; b++) {
-                    *byte_ptr |= 1 << (7 - b);
-                }
-            }
-            else {// set continuation bits
-                *byte_ptr |= 1 << 7;
-            }
-        }
-
-        unsigned int num_bits = required_bytes == 1 ? 7 : (i == 0 ? 7 - required_bytes : 6);
-        for(unsigned int b = 0; b < num_bits; b++) {
-            *byte_ptr |= (((codepoint >> shift) & 1) << b);
-            shift++;
-        }
-    }
-    (*buffer_ptr) += required_bytes;
-    *buffer_size_ptr -= required_bytes;
-    return 1;
-}
-
-static char oijson_internal_hex_value(char c) {
-    if (c >= '0' && c <= '9') {
-        return c - '0';
-    }
-    if (c >= 'A' && c <= 'F') {
-        return (c - 'A') + 10;
-    }
-    return (c - 'a') + 10;
-}
-
-static int escaped_unicode_to_bytes(const char** itr_ptr, unsigned int* size_ptr, unsigned char* bytes, int offset) {
-    for (int i = offset * 2; i < (offset * 2) + 4; i++) {
-        if (i % 2 == 0) {
-            bytes[i / 2] = 0;
-        }
-
-        if (!(*size_ptr) || !oijson_internal_is_hex_digit(**itr_ptr)) {
-            return 0;
-        }
-        char v = oijson_internal_hex_value(**itr_ptr);
-        if ((i % 2) == 0) {
-            v <<= 4;
-        }
-        bytes[i / 2] |= v;
-        (*size_ptr)--;
-        (*itr_ptr)++;
-    }
-    return 1;
-}
-
-static const char* oijson_internal_parse_char(const char* itr, unsigned int* size, char** out_ptr, unsigned int* out_size_ptr) {
-    OIJSON_CHECK_ITR();
-
-    const char escape_table[][2] = {
-        { '\"', '\"' },
-        { '\\', '\\' },
-        { '/', '/' },
-        { 'b', '\b' },
-        { 'f', '\f' },
-        { 'n', '\n' },
-        { 'r', '\r' },
-        { 't', '\t' },
-    };
-    int escape_table_len = sizeof(escape_table) / sizeof(escape_table[0]);
-
-    switch (*itr) {
-        case '\\':// escaped character
-            OIJSON_STEP_ITR();
-            OIJSON_CHECK_ITR();
-            switch (*itr) {
-                case 'u':
-                {
-                    OIJSON_STEP_ITR();
-                    unsigned char bytes[4] = { 0, 0, 0, 0};
-                    if (!escaped_unicode_to_bytes(&itr, size, bytes, 2)) {
-                        return OIJSON_NULLCHAR;
-                    }
-                    if (*size >= 2) {// check sequential escaped 'u'
-                        if (itr[0] == '\\' && itr[1] == 'u') {
-                            itr += 2;
-                            (*size) -= 2;
-                            bytes[0] = bytes[2];
-                            bytes[1] = bytes[3];
-                            if (!escaped_unicode_to_bytes(&itr, size, bytes, 2)) {
-                                return OIJSON_NULLCHAR;
-                            }
-                        }
-                    }
-                    unsigned long codepoint;
-                    if (!oijson_internal_utf16_to_codepoint(bytes, &codepoint) || !oijson_internal_unicode_to_utf8(out_ptr, out_size_ptr, codepoint)) {
-                        return OIJSON_NULLCHAR;
-                    }
-                    break;
-                }
-                default:
-                    for (int i = 0; i < escape_table_len; i++) {
-                        if (*itr == escape_table[i][0]) {
-                            if (!oijson_internal_push_char(out_ptr, out_size_ptr, escape_table[i][1])) {
-                                return OIJSON_NULLCHAR;
-                            }
-                            OIJSON_STEP_ITR();
-                            return itr;
-                        }
-                    }
-                    oijson_internal_error_set("invalid escaped control character");
-                    return OIJSON_NULLCHAR;
-            }
-            break;
-        default:
-            if (*itr >= 0x00 && *itr < 0x1f) {
-                oijson_internal_error_set("unescaped control character");
-                return OIJSON_NULLCHAR;
-            }
-            if (!oijson_internal_push_char(out_ptr, out_size_ptr, *itr)) {
-                return OIJSON_NULLCHAR;
-            }
-            OIJSON_STEP_ITR();
-            break;
-    }
-    return itr;
 }
 
 int oijson_value_as_string(oijson value, char* out, unsigned int out_size) {
