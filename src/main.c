@@ -179,6 +179,7 @@ int main(int argc, char* argv[]) {
         if (json.type != oijson_type_invalid) {
             print_json(json);
             print_json(oijson_object_value_by_name(json, "float3"));
+            print_json(oijson_object_value_by_name(json, "float\\u0032"));
             print_json(oijson_object_value_by_name(json, "float4"));
 
             print_json(oijson_object_value_by_index(json, 6));
