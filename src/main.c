@@ -237,6 +237,8 @@ int main(int argc, char* argv[]) {
         check_test(test_string("\"\\uD834\\uDD1E\"", "𝄞", string, 10), 1);
         check_test(test_string("\"\\udead\"", "invalid escaped unicode", string, 10), -1);// should error because of invalid escaped unicode
         check_test(test_string("\"\\uffff\\uffff\"", "invalid escaped unicode", string, 10), -1);// should error because of invalid escaped unicode
+        check_test(test_string("\"\\\n\"", "invalid escaped control character", string, 10), 0);// should error because of invalid escaped unicode
+        check_test(test_string("\"\n\"", "unescaped control character", string, 10), 0);// should error because of invalid escaped unicode
 
         printf("\nTEST RESULTS: %.2d/%.2d passed(%d failed)", tests_passed, tests_count, tests_count - tests_passed);
     }

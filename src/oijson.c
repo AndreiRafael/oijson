@@ -115,16 +115,18 @@ static const char* oijson_internal_consume_string(const char* itr, unsigned int*
                         }
                         break;
                     default:
-                        return OIJSON_NULLCHAR;// error, invalid character
+                        oijson_internal_error_set("invalid escaped control character");
+                        return OIJSON_NULLCHAR;
                 }
                 break;
-            case '\0':
-                oijson_internal_error_set("unexpected character");
-                return OIJSON_NULLCHAR;
             case '\"':
                 OIJSON_STEP_ITR();
                 return itr;
             default:
+                if (*itr >= 0 && *itr <= 0x1f) {
+                    oijson_internal_error_set("unescaped control character");
+                    return OIJSON_NULLCHAR;
+                }
                 OIJSON_STEP_ITR();
                 break;
         }
@@ -577,7 +579,7 @@ static int oijson_internal_push_char(char** buffer_ptr, unsigned int* buffer_siz
 }
 
 static int oijson_internal_utf16_to_codepoint(unsigned char utf16[4], unsigned long* out) {
-    if (utf16[0] || utf16[1])
+    if (utf16[0] || utf16[1])// TODO: check rfc to correctly handle invalid escape sequences
     {
         if ((utf16[0] & 0xfc) != 0xd8 || (utf16[2] & 0xfc) != 0xdc) {//invalid surrogate pair
             oijson_internal_error_set("invalid utf-16 surrogate pair");
@@ -707,7 +709,7 @@ static const char* oijson_internal_parse_char(const char* itr, unsigned int* siz
                     if (*size >= 2) {// check sequential escaped 'u'
                         if (itr[0] == '\\' && itr[1] == 'u') {
                             itr += 2;
-                            (itr) -= 2;
+                            (*size) -= 2;
                             bytes[0] = bytes[2];
                             bytes[1] = bytes[3];
                             if (!escaped_unicode_to_bytes(&itr, size, bytes, 2)) {
@@ -728,15 +730,18 @@ static const char* oijson_internal_parse_char(const char* itr, unsigned int* siz
                                 return OIJSON_NULLCHAR;
                             }
                             OIJSON_STEP_ITR();
-                            break;
+                            return itr;
                         }
                     }
+                    oijson_internal_error_set("invalid escaped control character");
+                    return OIJSON_NULLCHAR;
             }
             break;
-        case '\0':
-        case '\"':
-            return OIJSON_NULLCHAR;
         default:
+            if (*itr >= 0x00 && *itr < 0x1f) {
+                oijson_internal_error_set("unescaped control character");
+                return OIJSON_NULLCHAR;
+            }
             if (!oijson_internal_push_char(out_ptr, out_size_ptr, *itr)) {
                 return OIJSON_NULLCHAR;
             }
