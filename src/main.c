@@ -150,17 +150,22 @@ static int test_string(const char* string, const char* expected, char* buffer, u
             return !(*buffer) && !(*expected);
         }
         else {
-            printf("COULD NOT CONVERT TO STRING (%s)\n", string);
+            puts(oijson_error());
             return -1;
         }
     }
-    puts("INVALID JSON");
+    puts(oijson_error());
     return 0;
 }
 
+static int tests_passed = 0;
+static int tests_count = 0;
+
 void check_test(int test_result, int expected_result) {
     printf("test returned %d, and %d was expected ", test_result, expected_result);
+    tests_count++;
     if (test_result == expected_result) {
+        tests_passed++;
         puts("[PASSED]");
         return;
     }
@@ -223,7 +228,7 @@ int main(int argc, char* argv[]) {
     {
         char string[10];
         check_test(test_string("\"ab\\nc\"", "ab\nc", string, 10), 1);// success - c is printed in newline
-        check_test(test_string("\"ab\\nc\"", "buffer too small", string, 4), 0);// fails - no space for null terminator
+        check_test(test_string("\"ab\\nc\"", "buffer too small", string, 4), -1);// fails - no space for null terminator
 
         check_test(test_string("\"\\u002F\"", "/", string, 5), 1);// success - prints /
         check_test(test_string("\"/\"", "/", string, 5), 1);// success - prints /
@@ -231,6 +236,9 @@ int main(int argc, char* argv[]) {
 
         check_test(test_string("\"\\uD834\\uDD1E\"", "𝄞", string, 10), 1);
         check_test(test_string("\"\\udead\"", "invalid escaped unicode", string, 10), -1);// should error because of invalid escaped unicode
+        check_test(test_string("\"\\uffff\\uffff\"", "invalid escaped unicode", string, 10), -1);// should error because of invalid escaped unicode
+
+        printf("\nTEST RESULTS: %.2d/%.2d passed(%d failed)", tests_passed, tests_count, tests_count - tests_passed);
     }
     return 0;
 }
