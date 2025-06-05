@@ -49,25 +49,39 @@ static int oijson_internal_validate_utf8(const char* itr, unsigned int size, uns
         return 0;
     }
 
-    unsigned int byte_count = (*itr & (1 << 7)) ? 0 : 1;
-    for (int i = 0; i < 5; i++) {
-        char c = *itr;
-        if (!((c >> (7 - i)) & 1)) {
-            break;
+    unsigned char* itr_u = (unsigned char*)itr;
+
+    unsigned int byte_count = 0;
+    if (itr_u[0] & (1 << 7)) {
+        for (int i = 0; i < 5; i++) {
+            if (!((itr_u[0] >> (7 - i)) & 1)) {
+                break;
+            }
+            byte_count++;
         }
-        byte_count++;
+        if (byte_count == 1 || byte_count > 4) {// invalid continuation byte
+            oijson_internal_error_set("invalid utf-8");
+            return 0;
+        }
     }
-    if (byte_count > 4) {
+    else {
+        byte_count = 1;
+    }
+    if (size < byte_count) {
         oijson_internal_error_set("invalid utf-8");
         return 0;
     }
-    if (size < byte_count) {
-        oijson_internal_error_set("buffer too small");
-        return 0;
+
+    for (unsigned int i = 0; i < byte_count; i++) {// octet validation
+        unsigned char c = itr_u[i];
+        if (c == 0xc0 || c == 0xc1 || c >= 0xf5) {
+            oijson_internal_error_set("invalid utf-8");
+            return 0;
+        }
     }
 
     for (unsigned int i = 1; i < byte_count; i++) {// check continuations
-        unsigned char c = (unsigned char)itr[i];
+        unsigned char c = ((unsigned char*)itr)[i];
         if ((c & 0xc0) != 0x80) {
             oijson_internal_error_set("invalid utf-8");
             return 0;
