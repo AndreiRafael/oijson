@@ -49,16 +49,20 @@ static int oijson_internal_validate_utf8(const char* itr, unsigned int size, uns
         return 0;
     }
 
-    unsigned int byte_count = 1;
-    for (int i = 0; i < 4; i++) {
+    unsigned int byte_count = (*itr & (1 << 7)) ? 0 : 1;
+    for (int i = 0; i < 5; i++) {
         char c = *itr;
         if (!((c >> (7 - i)) & 1)) {
             break;
         }
         byte_count++;
     }
-    if (byte_count > 4 || size < byte_count) {
+    if (byte_count > 4) {
         oijson_internal_error_set("invalid utf-8");
+        return 0;
+    }
+    if (size < byte_count) {
+        oijson_internal_error_set("buffer too small");
         return 0;
     }
 
@@ -127,8 +131,7 @@ static int oijson_internal_push_char(char** buffer_ptr, unsigned int* buffer_siz
 }
 
 static int oijson_internal_utf16_to_codepoint(unsigned char utf16[4], unsigned long* out) {
-    if (utf16[0] || utf16[1])// TODO: check rfc to correctly handle invalid escape sequences
-    {
+    if (utf16[0] || utf16[1]) {
         if ((utf16[0] & 0xfc) != 0xd8 || (utf16[2] & 0xfc) != 0xdc) {//invalid surrogate pair
             oijson_internal_error_set("invalid escaped unicode");
             return 0;
