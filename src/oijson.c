@@ -7,10 +7,6 @@
 
 static char oijson_internal_error[128] = "";
 
-const char* oijson_error(void) {// TODO: set error messages upon errors
-    return oijson_internal_error;
-}
-
 static void oijson_internal_error_set(const char* message) {
     int i = 0;
     while (i < 127) {
@@ -22,6 +18,10 @@ static void oijson_internal_error_set(const char* message) {
         i++;
     }
     oijson_internal_error[i] = '\0';
+}
+
+const char* oijson_error(void) {
+    return oijson_internal_error;
 }
 
 static int oijson_internal_is_whitespace(const char c) {
@@ -407,6 +407,12 @@ static const char* oijson_internal_consume_number_info(const char* itr, unsigned
             OIJSON_STEP_ITR();
         }
     }
+
+    if (itr && oijson_internal_is_digit(*itr)) {
+        oijson_internal_error_set("invalid number");
+        return OIJSON_NULLCHAR;
+    }
+
     return itr;
 }
 
@@ -437,6 +443,7 @@ static const char* oijson_internal_consume_value(const char* itr, unsigned int* 
             return temp_itr;
         }
     }
+    oijson_internal_error_set(*size ? "unexpected character" : "unexpected end of json string");
     return OIJSON_NULLCHAR;
 }
 
@@ -457,7 +464,11 @@ static const char* oijson_internal_consume_key_value_pair(const char* itr, unsig
     }
 
     itr = oijson_internal_consume_whitespace(itr, size);
-    if (!itr || *itr != ':') {
+    if (!itr) {
+        return OIJSON_NULLCHAR;
+    }
+    if (*itr != ':') {
+        oijson_internal_error_set("':' expected");
         return OIJSON_NULLCHAR;
     }
 
@@ -481,21 +492,28 @@ static const char* oijson_internal_consume_object(const char* itr, unsigned int*
 
     OIJSON_STEP_ITR();// skip '{'
     itr = oijson_internal_consume_whitespace(itr, size);
+    OIJSON_CHECK_ITR();
+    if (*itr == '}') {
+        OIJSON_STEP_ITR();
+        return itr;
+    }
+
     while(1) {
         itr = oijson_internal_consume_key_value_pair(itr, size, 0, 0, 0, 0);
-
-        itr = oijson_internal_consume_whitespace(itr, size);
         if (!itr) {
             return OIJSON_NULLCHAR;
         }
+        itr = oijson_internal_consume_whitespace(itr, size);
+        OIJSON_CHECK_ITR();
         if (*itr == '}') {
             OIJSON_STEP_ITR();
             break;
         }
         if (*itr != ',') {
+            oijson_internal_error_set("',' or '}' expected");
             return OIJSON_NULLCHAR;
         }
-        OIJSON_STEP_ITR();// step over comma
+        OIJSON_STEP_ITR();// step over ','
     }
     return itr;
 }
@@ -507,14 +525,19 @@ static const char* oijson_internal_consume_array(const char* itr, unsigned int* 
         return OIJSON_NULLCHAR;
     }
 
-    OIJSON_STEP_ITR();
+    OIJSON_STEP_ITR();// step over ']'
     itr = oijson_internal_consume_whitespace(itr, size);
+    OIJSON_CHECK_ITR();
+    if (*itr == ']') {
+        OIJSON_STEP_ITR();
+        return itr;
+    }
+
     while(1) {
         itr = oijson_internal_consume_value(itr, size);// value
         if (!itr) {
             return OIJSON_NULLCHAR;
         }
-
         itr = oijson_internal_consume_whitespace(itr, size);
         if (!itr) {
             return OIJSON_NULLCHAR;
@@ -525,9 +548,10 @@ static const char* oijson_internal_consume_array(const char* itr, unsigned int* 
             break;
         }
         if (*itr != ',') {
+            oijson_internal_error_set("',' or ']' expected");
             return OIJSON_NULLCHAR;
         }
-        OIJSON_STEP_ITR();// step over comma
+        OIJSON_STEP_ITR();// step over ','
     }
     return itr;
 }

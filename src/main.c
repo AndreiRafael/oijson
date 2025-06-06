@@ -113,6 +113,16 @@ static int string_equal(const char* a, const char* b) {
     return *a == *b;
 }
 
+static int test_json_type(const char* json_string, oijson_type expected) {
+    printf("TEST JSON STRING: input: %s -> expected: %d -> got: ", json_string, expected);
+    oijson json = oijson_parse(json_string, string_length(json_string));
+    printf("%d\n", json.type);
+    if (json.type == oijson_type_invalid) {
+        puts(oijson_error());
+    }
+    return json.type == expected;
+}
+
 static int test_value_by_name(oijson object, const char* name, const char* expected) {
     printf("TEST VALUE BY NAME: input: %s -> expected: %s -> got: ", name, expected);
     oijson json = oijson_object_value_by_name(object, name);
@@ -220,6 +230,31 @@ int main(int argc, char* argv[]) {
         check_test(json.type != oijson_type_invalid, 1);
         check_test(oijson_object_count(json) == 8, 1);
 
+        check_test(test_json_type("\"abc\"", oijson_type_string), 1);
+        check_test(test_json_type("\"\\udead\"", oijson_type_invalid), 1);
+
+        check_test(test_json_type("true", oijson_type_true), 1);
+        check_test(test_json_type("false", oijson_type_false), 1);
+        check_test(test_json_type("null", oijson_type_null), 1);
+
+        check_test(test_json_type("1", oijson_type_number), 1);
+        check_test(test_json_type("1.2", oijson_type_number), 1);
+        check_test(test_json_type("1.2e3", oijson_type_number), 1);
+        check_test(test_json_type("01.2e3", oijson_type_invalid), 1);// leading zero
+
+        check_test(test_json_type("{}", oijson_type_object), 1);
+        check_test(test_json_type("{,}", oijson_type_invalid), 1);
+        check_test(test_json_type("{\"a\":0}", oijson_type_object), 1);
+        check_test(test_json_type("{\"a\":0,\"b\":1}", oijson_type_object), 1);
+        check_test(test_json_type("{\"a\":0,\"b\":1,}", oijson_type_invalid), 1);
+        check_test(test_json_type("{\"a\"0}", oijson_type_invalid), 1);
+
+        check_test(test_json_type("[]", oijson_type_array), 1);
+        check_test(test_json_type("[,]", oijson_type_invalid), 1);
+        check_test(test_json_type("[0,1,2]", oijson_type_array), 1);
+        check_test(test_json_type("[0,1,2,]", oijson_type_invalid), 1);
+        check_test(test_json_type("[0,1,2", oijson_type_invalid), 1);
+
         report_partial_tests("object");
 
         if (json.type != oijson_type_invalid) {
@@ -230,7 +265,7 @@ int main(int argc, char* argv[]) {
             check_test(test_value_by_name(json, "float\\u0033", "-10.0e2"), 1);
             check_test(test_value_by_name(json, "float4", "not found"), 0);
             check_test(test_value_by_name(json, "float\\u0034", "not found"), 0);
-            
+
             report_partial_tests("value by name");
         }
         oijson json2 = oijson_parse("0", 1);
