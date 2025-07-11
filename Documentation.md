@@ -1,6 +1,6 @@
 # OIJSON Documentation
 
-OIJson is supposed to be simple, with as little types and functions as needed. Therefore, it should be easy to learn to use the library by, well, *using the library*. That said, this single page documentation attempts to be a clarifying resource, when the code itself is not intuitive enough.
+OIJSON is supposed to be simple, with as little types and functions as needed. Therefore, it should be easy to learn to use the library by, well, *using the library*. That said, this single page documentation attempts to be a clarifying resource, when the code itself is not intuitive enough.
 
 # Enums
 
@@ -26,7 +26,7 @@ The type of a JSON value. *oijson_type_invalid* does not direcly map to a JSON t
 
 ### oijson
 
-Represents a JSON object, containg a reference to the raw JSON string as well as its length. To get usable data types from an oijson, use the [value functions](#Functions)
+Represents a JSON object, containg a reference to the raw JSON string as well as its length. To get usable data types from an oijson, use the [value functions](#Functions). The contents of **buffer** should NOT be modified externally, as doing so may invalidate the JSON object and lead to undesired behaviour.
 
 |Field  |Type          |Description        |
 |:------|:-------------|:------------------|
@@ -64,7 +64,7 @@ Represents a JSON object, containg a reference to the raw JSON string as well as
 const char* oijson_error(void)
 ```
 
-Returns the pointer to a stack allocated error string. The string is guaranteed to be null terminated and is updated with any function call, becoming empty when a function succeeds.
+Returns the pointer to a stack allocated error string. The string is guaranteed to be null terminated and is updated whenever an error occurs. The value is not updated when a function succeeds.
 
 <br>
 

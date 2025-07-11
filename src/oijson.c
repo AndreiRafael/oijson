@@ -557,7 +557,6 @@ static const char* oijson_internal_consume_array(const char* itr, unsigned int* 
 }
 
 oijson oijson_parse(const char* string, unsigned int string_size) {
-    oijson_internal_error_set("");
     string = oijson_internal_consume_whitespace(string, &string_size);
     if (!string) {
         oijson_internal_error_set("invalid string");
@@ -606,6 +605,7 @@ oijson oijson_parse(const char* string, unsigned int string_size) {
 
 unsigned int oijson_object_count(oijson object) {
     if (object.type != oijson_type_object) {
+        oijson_internal_error_set("not an object");
         return 0;
     }
 
@@ -686,6 +686,7 @@ static int oijson_internal_check_value(const char* start, const char* end, const
 
 oijson oijson_object_value_by_name(oijson object, const char* name) {
     if (object.type != oijson_type_object || !name) {
+        oijson_internal_error_set("not an object");
         return OIJSON_INVALID;
     }
 
@@ -713,11 +714,13 @@ oijson oijson_object_value_by_name(oijson object, const char* name) {
         }
         itr = oijson_internal_consume_utf8(itr, &size);// skip ','
     }
+    oijson_internal_error_set("name/value pair not found");
     return OIJSON_INVALID;
 }
 
 oijson oijson_object_value_by_index(oijson object, unsigned int index) {
     if (object.type != oijson_type_object) {
+        oijson_internal_error_set("not an object");
         return OIJSON_INVALID;
     }
 
@@ -744,11 +747,13 @@ oijson oijson_object_value_by_index(oijson object, unsigned int index) {
         }
         itr = oijson_internal_consume_utf8(itr, &size);// skip ','
     }
+    oijson_internal_error_set("index out of range");
     return OIJSON_INVALID;
 }
 
 oijson oijson_object_name_by_index(oijson object, unsigned int index) {
     if (object.type != oijson_type_object) {
+        oijson_internal_error_set("not an object");
         return OIJSON_INVALID;
     }
 
@@ -773,12 +778,14 @@ oijson oijson_object_name_by_index(oijson object, unsigned int index) {
         }
         itr = oijson_internal_consume_utf8(itr, &size);// skip ','
     }
+    oijson_internal_error_set("index out of range");
     return OIJSON_INVALID;
 }
 
 
 unsigned int oijson_array_count(oijson array) {
     if (array.type != oijson_type_array) {
+        oijson_internal_error_set("not an array");
         return 0;
     }
 
@@ -807,6 +814,7 @@ unsigned int oijson_array_count(oijson array) {
 
 oijson oijson_array_value_by_index(oijson array, unsigned int index) {
     if (array.type != oijson_type_array) {
+        oijson_internal_error_set("not an array");
         return OIJSON_INVALID;
     }
 
@@ -831,11 +839,13 @@ oijson oijson_array_value_by_index(oijson array, unsigned int index) {
         }
         itr = oijson_internal_consume_utf8(itr, &size);// skip ','
     }
+    oijson_internal_error_set("index out of range");
     return OIJSON_INVALID;
 }
 
 int oijson_value_as_string(oijson value, char* out, unsigned int out_size) {
     if (value.type != oijson_type_string) {
+        oijson_internal_error_set("value is not a string");
         return 0;
     }
 
@@ -901,6 +911,7 @@ static const char* oijson_internal_parse_ll(const char* string, unsigned int str
 
 int oijson_value_as_double(oijson value, double* out) {
     if (value.type != oijson_type_number) {
+        oijson_internal_error_set("value is not a number");
         return 0;
     }
 
@@ -975,6 +986,7 @@ int oijson_value_as_float(oijson value, float* out) {
 
 int oijson_value_as_long(oijson value, long* out) {
     if (value.type != oijson_type_number) {
+        oijson_internal_error_set("value is not a number");
         return 0;
     }
 
