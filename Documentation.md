@@ -6,7 +6,7 @@ OIJson is supposed to be simple, with as little types and functions as needed. T
 
 ### oijson_type
 
-The type of a json value. *oijson_type_invalid* does not direcly map to a json type and is used when a json string fails to be parsed due to an error. In such cases, [oijson_error](#oijson_error) can be called for an error message.
+The type of a JSON value. *oijson_type_invalid* does not direcly map to a JSON type and is used when a JSON string fails to be parsed due to an error. In such cases, [oijson_error](#oijson_error) can be called for an error message.
 
 |Value               |Json type |
 |:-------------------|:-------- |
@@ -26,16 +26,38 @@ The type of a json value. *oijson_type_invalid* does not direcly map to a json t
 
 ### oijson
 
+Represents a JSON object, containg a reference to the raw JSON string as well as its length. To get usable data types from an oijson, use the [value functions](#Functions)
+
 |Field  |Type          |Description        |
 |:------|:-------------|:------------------|
 |buffer | const char*  | Read-only. Pointer to the start of the object in the buffer provided in [oijson_parse](#oijson_parse). External modifications to this buffer may invalidate the object. |
-|size   | unsigned int | Read-only. The size, in bytes, of the json string representing the object, including whitespace. |
-|type   | type         | Read-only. The oijson_type of the json object. |
+|size   | unsigned int | Read-only. The size, in bytes, of the JSON string representing the object, including whitespace. |
+|type   | type         | Read-only. The oijson_type of the JSON object. |
 
 <br>
 <br>
 
 # Functions
+
+- General
+    - [oijson_error](#oijson_error)
+    - [oijson_parse](#oijson_parse)
+- Object
+    - [oijson_object_count](#oijson_object_count)
+    - [oijson_object_value_by_name](#oijson_object_value_by_name)
+    - [oijson_object_name_by_index](#oijson_object_name_by_index)
+    - [oijson_object_value_by_index](#oijson_object_value_by_index)
+- Array
+    - [oijson_array_count](#oijson_array_count)
+    - [oijson_array_value_by_index](#oijson_array_value_by_index)
+- Values
+    - [oijson_value_as_string](#oijson_value_as_string)
+    - [oijson_value_as_long](#oijson_value_as_long)
+    - [oijson_value_as_int](#oijson_value_as_int)
+    - [oijson_value_as_double](#oijson_value_as_double)
+    - [oijson_value_as_float](#oijson_value_as_float)
+
+<br>
 
 ### oijson_error
 ```C
@@ -48,14 +70,14 @@ Returns the pointer to a stack allocated error string. The string is guaranteed 
 
 ### oijson_parse
 ```C
-oijson oijson_parse(const char* json, unsigned int json_size)
+oijson oijson_parse(const char* JSON, unsigned int JSON_size)
 ```
 
-Returns an [oijson](#oijson) struct. The [type](#oijson_type) field of the returned struct indicates if the operation was successful, with a value of *oijson_type_invalid* indicating failure. Use [oijson_error](#oijson-error) for details.
+Returns an [oijson](#oijson) struct. The [type](#oijson_type) field of the returned struct indicates if the operation was successful, with a value of *oijson_type_invalid* indicating failure. Use [oijson_error](#oijson_error) for details.
 
 |Parameter |Type |Description |
 |:---------|:----|:-----------|
-|json      |[oijson](#oijson) | Buffer containing null-terminated json string. Any manual modification to this buffer after calling [oijson_parse](oijson_parse) may invalidate the object. |
+|json      |[oijson](#oijson) | Buffer containing null-terminated JSON string. Any manual modification to this buffer after calling [oijson_parse](oijson_parse) may invalidate the object. |
 |json_size |unsigned int | Size of buffer. |
 
 <br>
@@ -68,7 +90,7 @@ Returns the amount of name/value pairs in **object**. The [type](#oijson_type) o
 
 |Parameter |Type |Description |
 |:---------|:----|:-----------|
-|object    |[oijson](#oijson) |The json object. This must be of [type](#oijson_type) *oijson_type_object*. |
+|object    |[oijson](#oijson) |The JSON object. This must be of [type](#oijson_type) *oijson_type_object*. |
 
 <br>
 
@@ -80,7 +102,7 @@ Returns the value of the name/value pair called **name** as an [oijson](#oijson)
 
 |Parameter |Type|Description |
 |:---------|:---|:-----------|
-|object    |[oijson](#oijson) | The json object. This must be of [type](#oijson_type) *oijson_type_object*. |
+|object    |[oijson](#oijson) | The JSON object. This must be of [type](#oijson_type) *oijson_type_object*. |
 |name      |const char*| The name of the value to query. |
 
 <br>
@@ -93,7 +115,7 @@ Returns the name of the name/value pair at **index** as an [oijson](#oijson) of 
 
 |Parameter |Type|Description |
 |:---------|:---|:-----------|
-|object    |[oijson](#oijson) | The json object. This must be of [type](#oijson_type) *oijson_type_object*. |
+|object    |[oijson](#oijson) | The JSON object. This must be of [type](#oijson_type) *oijson_type_object*. |
 |index     |unsigned int | The index of the name to query. |
 
 <br>
@@ -106,7 +128,7 @@ Returns the value of the name/value pair at **index** as an [oijson](#oijson). I
 
 |Parameter |Type|Description |
 |:---------|:---|:-----------|
-|object    |[oijson](#oijson) | The json object. This must be of [type](#oijson_type) *oijson_type_object*. |
+|object    |[oijson](#oijson) | The JSON object. This must be of [type](#oijson_type) *oijson_type_object*. |
 |index     |unsigned int | The index of the value to query. |
 
 <br>
@@ -120,7 +142,7 @@ Returns the amount of values in **array**. The [type](#oijson_type) of **array**
 
 |Parameter |Type|Description |
 |:---------|:---|:-----------|
-|array     |[oijson](#oijson) | The json array. This must be of [type](#oijson_type) *oijson_type_array*. |
+|array     |[oijson](#oijson) | The JSON array. This must be of [type](#oijson_type) *oijson_type_array*. |
 
 <br>
 
@@ -133,7 +155,7 @@ Returns the value at **index** as an [oijson](#oijson). If **array** is not of [
 
 |Parameter |Type|Description |
 |:---------|:---|:-----------|
-|object    |[oijson](#oijson) | The json array. This must be of [type](#oijson_type) *oijson_type_array*. |
+|object    |[oijson](#oijson) | The JSON array. This must be of [type](#oijson_type) *oijson_type_array*. |
 |index     |unsigned int | The index of the value to query. |
 
 <br>
