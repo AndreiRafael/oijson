@@ -1,6 +1,12 @@
 # OIJSON
 OIJSON is just another implementation of a C json parser(read-only).
 
+Goals
+- Tiny
+- No allocations.
+- No dependencies.
+- RFC 8259 compliant.
+
 # Build
 Compile and link oijson.c, include oijson.h to use the library. The included CMake build is for testing.
 

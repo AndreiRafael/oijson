@@ -70,7 +70,7 @@ Returns the pointer to a stack allocated error string. The string is guaranteed 
 
 ### oijson_parse
 ```C
-oijson oijson_parse(const char* JSON, unsigned int JSON_size)
+oijson oijson_parse(const char* json, unsigned int json_size)
 ```
 
 Returns an [oijson](#oijson) struct. The [type](#oijson_type) field of the returned struct indicates if the operation was successful, with a value of *oijson_type_invalid* indicating failure. Use [oijson_error](#oijson_error) for details.
