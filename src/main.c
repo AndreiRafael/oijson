@@ -314,10 +314,11 @@ int main(int argc, char* argv[]) {
         check_test(test_string("\"\\uffff\\uffff\"", "invalid escaped unicode", string, 10), 0);// should fail because of invalid escaped unicode
         check_test(test_string("\"\\\n\"", "invalid escaped control character", string, 10), 0);// should fail because of invalid escaped unicode
         check_test(test_string("\"\n\"", "unescaped control character", string, 10), 0);// should fail because of invalid escaped unicode
-        
+
         report_partial_tests("string escaping");
-        
+
         print_test_results("TOTAL", tests_passed, tests_count);
     }
+
     return 0;
 }
