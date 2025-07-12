@@ -246,7 +246,8 @@ static int escaped_unicode_to_bytes(const char** itr_ptr, unsigned int* size_ptr
 
 static const char* oijson_internal_parse_char(const char* itr, unsigned int* size, char** out_ptr, unsigned int* out_size_ptr) {
     OIJSON_CHECK_ITR();
-    if (!oijson_internal_validate_utf8(itr, *size, 0)) {
+    unsigned int byte_count;
+    if (!oijson_internal_validate_utf8(itr, *size, &byte_count)) {
         return OIJSON_NULLCHAR;
     }
 
@@ -306,7 +307,7 @@ static const char* oijson_internal_parse_char(const char* itr, unsigned int* siz
             }
             break;
         default:
-            do {
+            for (unsigned int i = 0; i < byte_count; i++) {
                 if (*itr >= 0x00 && *itr < 0x1f) {
                     oijson_internal_error_set("unescaped control character");
                     return OIJSON_NULLCHAR;
@@ -315,7 +316,7 @@ static const char* oijson_internal_parse_char(const char* itr, unsigned int* siz
                     return OIJSON_NULLCHAR;
                 }
                 OIJSON_STEP_ITR();
-            } while ((*itr & 0xc0) == 0x80);
+            }
             break;
     }
     return itr;

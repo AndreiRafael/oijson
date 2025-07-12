@@ -78,8 +78,8 @@ Returns an [oijson](#oijson) struct. The [type](#oijson_type) field of the retur
 
 |Parameter |Type |Description |
 |:---------|:----|:-----------|
-|json      |[oijson](#oijson) | Buffer containing null-terminated JSON string. Any manual modification to this buffer after calling [oijson_parse](oijson_parse) may invalidate the object. |
-|json_size |unsigned int | Size of buffer. |
+|json      |[oijson](#oijson) | Buffer containing a JSON string. If the string is null terminated, parsing will stop at at the null terminator. Otherwise, **json_size** indicates the size of the string in bytes. Any manual modification to this buffer after calling [oijson_parse](oijson_parse) may invalidate the object. |
+|json_size |unsigned int | Size of buffer in bytes. |
 
 <br>
 
@@ -165,13 +165,13 @@ Returns the value at **index** as an [oijson](#oijson). If **array** is not of [
 ```C
 int oijson_value_formatted(oijson value, char* out, unsigned int out_size)
 ```
-Gets the **value** as a formatted UTF-8 string and copies it into **out**, removing whitespace. Returns 1 on success, or 0 if the string cannot fit into the buffer of size **out_size**. Upon success, out will contain a null-terminated string.
+Gets the **value** as a formatted UTF-8 string and copies it into **out**, removing whitespace. Returns 1 on success, or 0 if the string cannot fit into the buffer of size **out_size**. Upon success, out will contain a null terminated string.
 
 |Parameter |Type|Description |
 |:---------|:---|:-----------|
 |value     |[oijson](#oijson) | The JSON value. |
 |out       |const char* | The buffer to which the value will be written. |
-|out_size  |unsigned int |The size of **out**. |
+|out_size  |unsigned int |The size of **out** in bytes. |
 
 <br>
 
@@ -180,13 +180,13 @@ Gets the **value** as a formatted UTF-8 string and copies it into **out**, remov
 int oijson_value_as_string(oijson value, char* out, unsigned int out_size)
 ```
 
-Gets the **value** as a string and copies it into **out**. Returns 1 on success, or 0 if **value** is not of [type](#oijson_type) *oijson_type_string* or if the string cannot fit into the buffer of size **out_size**. Upon success, out will contain a null-terminated string.
+Gets the **value** as a string and copies it into **out**. Returns 1 on success, or 0 if **value** is not of [type](#oijson_type) *oijson_type_string* or if the string cannot fit into the buffer of size **out_size**. Upon success, out will contain a null terminated string.
 
 |Parameter |Type|Description |
 |:---------|:---|:-----------|
 |value     |[oijson](#oijson) | The string value. This must be of [type](#oijson_type) *oijson_type_string*. |
 |out       |const char* | The buffer to which the value will be written. |
-|out_size  |unsigned int |The size of **out**. |
+|out_size  |unsigned int |The size of **out** in bytes. |
 
 <br>
 
