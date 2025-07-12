@@ -30,6 +30,7 @@ oijson oijson_object_value_by_index(oijson object, unsigned int index);
 unsigned int oijson_array_count(oijson array);
 oijson oijson_array_value_by_index(oijson array, unsigned int index);
 
+int oijson_value_formatted(oijson value, char* out, unsigned int out_size);
 int oijson_value_as_string(oijson value, char* out, unsigned int out_size);
 int oijson_value_as_long(oijson value, long* out);
 int oijson_value_as_int(oijson value, int* out);

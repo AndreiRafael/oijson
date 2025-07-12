@@ -191,6 +191,24 @@ static int test_string(const char* string, const char* expected, char* buffer, u
     return 0;
 }
 
+static int test_formatted(const char* string, const char* expected, char* buffer, unsigned int buffer_size) {
+    puts("FORMATTED TEST");
+    printf("input: %s -> expected: %s -> got: ", string, expected);
+    oijson json = oijson_parse(string, string_length(string));
+    if (json.type != oijson_type_invalid) {
+        if (oijson_value_formatted(json, buffer, buffer_size)) {
+            puts(buffer);
+            while (*buffer && *expected && *buffer == *expected) {
+                buffer++;
+                expected++;
+            }
+            return !(*buffer) && !(*expected);
+        }
+    }
+    puts(oijson_error());
+    return 0;
+}
+
 static int tests_passed = 0;
 static int tests_count = 0;
 static int tests_passed_partial = 0;
@@ -316,9 +334,42 @@ int main(int argc, char* argv[]) {
         check_test(test_string("\"\n\"", "unescaped control character", string, 10), 0);// should fail because of invalid escaped unicode
 
         report_partial_tests("string escaping");
-
-        print_test_results("TOTAL", tests_passed, tests_count);
     }
+
+    {
+        char string[40];
+        check_test(test_formatted("\"string\"", "\"string\"", string, 40), 1);// success - actual string
+        check_test(test_formatted(" \"string\" ", "\"string\"", string, 40), 1);// success - actual string (extra spacing)
+        check_test(test_formatted("0", "0", string, 40), 1);// success - number
+        check_test(test_formatted(" 0 ", "0", string, 40), 1);// success - number (extra spacing)
+        check_test(test_formatted("1.0e2", "1.0e2", string, 40), 1);// success - number
+        check_test(test_formatted(" 1.0e2 ", "1.0e2", string, 40), 1);// success - number (extra spacing)
+
+        check_test(test_formatted("{}", "{}", string, 40), 1);// success - empty object
+        check_test(test_formatted(" { } ", "{}", string, 40), 1);// success - empty object (extra spacing)
+        check_test(test_formatted(" { \"val\" : \"a b\" } ", "{\"val\":\"a b\"}", string, 40), 1);// success - simple object
+        check_test(test_formatted(" { \"val\" : \"a b\", \"other\" : 0.0 } ", "{\"val\":\"a b\",\"other\":0.0}", string, 40), 1);// success - less simple object
+
+        check_test(test_formatted("[]", "[]", string, 40), 1);// success - empty array
+        check_test(test_formatted(" [ ] ", "[]", string, 40), 1);// success - empty array (extra spacing)
+        check_test(test_formatted(" [ \"my value\" ] ", "[\"my value\"]", string, 40), 1);// success - simple array
+        check_test(test_formatted(" [ \"my value\", \"other value\" ] ", "[\"my value\",\"other value\"]", string, 40), 1);// success - less simple array
+        check_test(test_formatted(" [ \"my value\", true, 0 ] ", "[\"my value\",true,0]", string, 40), 1);// success - less simple array with mixed types
+
+        check_test(test_formatted("true", "true", string, 40), 1);// success - true
+        check_test(test_formatted(" true ", "true", string, 40), 1);// success - true (extra spacing)
+        check_test(test_formatted("false", "false", string, 40), 1);// success - false
+        check_test(test_formatted(" false ", "false", string, 40), 1);// success - false (extra spacing)
+        check_test(test_formatted("null", "null", string, 40), 1);// success - null
+        check_test(test_formatted(" null ", "null", string, 40), 1);// success - null (extra spacing)
+
+        check_test(test_formatted(" \"\\uD834\\uDD1E\" ", "\"𝄞\"", string, 40), 1);
+        check_test(test_formatted(" \"𝄞\" ", "\"𝄞\"", string, 40), 1);
+
+        report_partial_tests("formatted values");
+    }
+
+    print_test_results("TOTAL", tests_passed, tests_count);
 
     return 0;
 }

@@ -306,14 +306,16 @@ static const char* oijson_internal_parse_char(const char* itr, unsigned int* siz
             }
             break;
         default:
-            if (*itr >= 0x00 && *itr < 0x1f) {
-                oijson_internal_error_set("unescaped control character");
-                return OIJSON_NULLCHAR;
-            }
-            if (out_ptr && !oijson_internal_push_char(out_ptr, out_size_ptr, *itr)) {
-                return OIJSON_NULLCHAR;
-            }
-            OIJSON_STEP_ITR();
+            do {
+                if (*itr >= 0x00 && *itr < 0x1f) {
+                    oijson_internal_error_set("unescaped control character");
+                    return OIJSON_NULLCHAR;
+                }
+                if (out_ptr && !oijson_internal_push_char(out_ptr, out_size_ptr, *itr)) {
+                    return OIJSON_NULLCHAR;
+                }
+                OIJSON_STEP_ITR();
+            } while ((*itr & 0xc0) == 0x80);
             break;
     }
     return itr;
@@ -841,6 +843,106 @@ oijson oijson_array_value_by_index(oijson array, unsigned int index) {
     }
     oijson_internal_error_set("index out of range");
     return OIJSON_INVALID;
+}
+
+static int oijson_internal_formatted_value(oijson value, char** out_ptr, unsigned int* out_size_ptr);
+
+static int oijson_internal_formatted_object(oijson object, char** out_ptr, unsigned int* out_size_ptr) {
+    if (!oijson_internal_push_char(out_ptr, out_size_ptr, '{')) {
+        return 0;
+    }
+
+    unsigned int count = oijson_object_count(object);
+    for (unsigned int i = 0; i < count; i++) {
+        if (i != 0 && !oijson_internal_push_char(out_ptr, out_size_ptr, ',')) {
+            return 0;
+        }
+
+        oijson name = oijson_object_name_by_index(object, i);
+        if (!oijson_internal_formatted_value(name, out_ptr, out_size_ptr)) {
+            return 0;
+        }
+
+        if (!oijson_internal_push_char(out_ptr, out_size_ptr, ':')) {
+            return 0;
+        }
+
+        oijson value = oijson_object_value_by_index(object, i);
+        if (!oijson_internal_formatted_value(value, out_ptr, out_size_ptr)) {
+            return 0;
+        }
+    }
+    return oijson_internal_push_char(out_ptr, out_size_ptr, '}');
+}
+
+static int oijson_internal_formatted_array(oijson array, char** out_ptr, unsigned int* out_size_ptr) {
+    if (!oijson_internal_push_char(out_ptr, out_size_ptr, '[')) {
+        return 0;
+    }
+
+    unsigned int count = oijson_array_count(array);
+    for (unsigned int i = 0; i < count; i++) {
+        if (i != 0 && !oijson_internal_push_char(out_ptr, out_size_ptr, ',')) {
+            return 0;
+        }
+
+        oijson value = oijson_array_value_by_index(array, i);
+        if (!oijson_internal_formatted_value(value, out_ptr, out_size_ptr)) {
+            return 0;
+        }
+    }
+    return oijson_internal_push_char(out_ptr, out_size_ptr, ']');
+}
+
+static int oijson_internal_formatted_string(oijson value, char** out_ptr, unsigned int* out_size_ptr) {
+    const char* itr = value.buffer;
+    unsigned int size = value.size;
+    do {
+        itr = oijson_internal_parse_char(itr, &size, out_ptr, out_size_ptr);
+        if (!itr) {
+            return 0;
+        }
+    } while (*itr != '\"');
+    return oijson_internal_push_char(out_ptr, out_size_ptr, '\"');
+}
+
+static int oijson_internal_formatted_value(oijson value, char** out_ptr, unsigned int* out_size_ptr) {
+    switch (value.type) {
+        case oijson_type_invalid:
+            return 0;
+        case oijson_type_object:
+            if (!oijson_internal_formatted_object(value, out_ptr, out_size_ptr)) {
+                return 0;
+            }
+            break;
+        case oijson_type_array:
+            if (!oijson_internal_formatted_array(value, out_ptr, out_size_ptr)) {
+                return 0;
+            }
+            break;
+        case oijson_type_string:
+            return oijson_internal_formatted_string(value, out_ptr, out_size_ptr);
+        default:
+            for (unsigned int i = 0; i < value.size; i++) {
+                if (!oijson_internal_push_char(out_ptr, out_size_ptr, value.buffer[i])) {
+                    return 0;
+                }
+            }
+            break;
+    }
+    return 1;
+}
+
+int oijson_value_formatted(oijson value, char* out, unsigned int out_size) {
+    if (value.type == oijson_type_invalid) {
+        oijson_internal_error_set("value is not valid");
+        return 0;
+    }
+
+    if (!oijson_internal_formatted_value(value, &out, &out_size)) {
+        return 0;
+    }
+    return oijson_internal_push_char(&out, &out_size, '\0');
 }
 
 int oijson_value_as_string(oijson value, char* out, unsigned int out_size) {

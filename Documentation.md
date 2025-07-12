@@ -51,6 +51,7 @@ Represents a JSON object, containg a reference to the raw JSON string as well as
     - [oijson_array_count](#oijson_array_count)
     - [oijson_array_value_by_index](#oijson_array_value_by_index)
 - Values
+    - [oijson_value_formatted](#oijson_value_formatted)
     - [oijson_value_as_string](#oijson_value_as_string)
     - [oijson_value_as_long](#oijson_value_as_long)
     - [oijson_value_as_int](#oijson_value_as_int)
@@ -157,6 +158,20 @@ Returns the value at **index** as an [oijson](#oijson). If **array** is not of [
 |:---------|:---|:-----------|
 |object    |[oijson](#oijson) | The JSON array. This must be of [type](#oijson_type) *oijson_type_array*. |
 |index     |unsigned int | The index of the value to query. |
+
+<br>
+
+### oijson_value_formatted
+```C
+int oijson_value_formatted(oijson value, char* out, unsigned int out_size)
+```
+Gets the **value** as a formatted UTF-8 string and copies it into **out**, removing whitespace. Returns 1 on success, or 0 if the string cannot fit into the buffer of size **out_size**. Upon success, out will contain a null-terminated string.
+
+|Parameter |Type|Description |
+|:---------|:---|:-----------|
+|value     |[oijson](#oijson) | The JSON value. |
+|out       |const char* | The buffer to which the value will be written. |
+|out_size  |unsigned int |The size of **out**. |
 
 <br>
 
