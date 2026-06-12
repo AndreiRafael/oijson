@@ -39,7 +39,7 @@ Check [Documentation.md](Documentation.md)
 **A:** Read the contents of the file into a buffer of type char*. Null terminate the contents and provide said buffer and its size to [oijson_parse](Documentation.md#oijson_parse). While operating on the returned [oijson](Documentation.md#oijson) struct, do NOT modify the contents of the buffer.
 
 **Q: Can I edit JSON fields/save to file?**<br>
-**A:** No, the library is *(currently?)* read-only. One of the goals of the library is avoiding allocations and libc dependency, so there are some challenges to changing existing values, altough it is not completely out of the question.
+**A:** No, the library is *(currently?)* read-only. One of the goals of the library is avoiding allocations and a libc dependency, so there are some challenges to changing existing values, altough it is not completely out of the question.
 
 **Q: Why no oijson_value_as_bool?**<br>
 **A:** There's no need, since you can directly check the type for *oijson_type_true* or *oijson_type_false*. Same for *oijson_type_null*.
@@ -50,4 +50,4 @@ Check [Documentation.md](Documentation.md)
 Number parsing is somewhat rudimentary and may lead to incorrect values and even C undefined behaviour when reading large numbers. Reading small numbers as int or long will also lead to absurd rounding errors. Suggestions are welcome!
 
 **Iterating**
-Iterating on items of arrays and objects is slow, and could be mitigated by intruducing an actual iterator construct. 
+Iterating on items of arrays and objects is slow, and could be mitigated by introducing an actual iterator construct. 
