@@ -35,7 +35,7 @@ while (iterator.type != oijson_iterator_type_invalid) {
     char n[20];
     oijson_value_as_string(iterator.name, n, 20);
     char v[20];
-    oijson_value_as_string(iterator.value, v, 20);
+    oijson_value_formatted(iterator.value, v, 20);
     printf("Value named %s is %s\n", n, v);
 
     oijson_iterator_advance(&iterator);
