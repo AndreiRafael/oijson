@@ -23,7 +23,7 @@ The type of a JSON value. *oijson_type_invalid* does not direcly map to a JSON t
 
 ### oijson_iterator_type
 
-The type of an iterator. *oijson_iterator_type_invalid* indicates an invalid iterator. An iterator will be invalid if the [oijson](#oijson) value it is iterating is not an object nor an array. An interator will also become invalid once it reaches the end of an object or array, or if the object or array is empty.
+The type of an iterator. *oijson_iterator_type_invalid* indicates an invalid iterator. An iterator will be invalid if the [oijson](#oijson) value it is iterating is neither an object nor an array. An interator will also become invalid once it reaches the end of an object or array, or if the object or array is empty.
 
 |Value                        |Description |
 |:----------------------------|:--------   |
