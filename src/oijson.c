@@ -133,6 +133,16 @@ static const char* oijson_internal_consume_null(const char* itr, unsigned int* s
     return oijson_internal_consume_keyword(itr, size, "null");
 }
 
+static int oijson_internal_pre_truncate(char** buffer_ptr, unsigned int* buffer_size_ptr) {
+    if (*buffer_size_ptr) {
+        (*buffer_size_ptr)--;
+        (*buffer_ptr)[*buffer_size_ptr] = '\0';
+        return 1;
+    }
+    oijson_internal_error_set("buffer too small");
+    return 0;
+}
+
 static int oijson_internal_push_char(char** buffer_ptr, unsigned int* buffer_size_ptr, char c) {
     if (*buffer_size_ptr) {
         **buffer_ptr = c;
@@ -450,20 +460,23 @@ static const char* oijson_internal_consume_value(const char* itr, unsigned int* 
     return OIJSON_NULLCHAR;
 }
 
-static const char* oijson_internal_consume_key_value_pair(const char* itr, unsigned int* size, unsigned int* size_value, const char** key_start, const char** key_end, const char** value_start) {
+static const char* oijson_internal_consume_name_value_pair(const char* itr, unsigned int* size, const char** name_start, unsigned int* name_size, const char** value_start, unsigned int* value_size) {
     itr = oijson_internal_consume_whitespace(itr, size);
     OIJSON_CHECK_ITR();
 
     // read name
-    if (key_start) {
-        *key_start = itr;
+    if (name_start) {
+        *name_start = itr;
+    }
+    if (name_size) {
+        *name_size = *size;
     }
     itr = oijson_internal_consume_string(itr, size);
     if (!itr) {
         return OIJSON_NULLCHAR;
     }
-    if (key_end) {
-        *key_end = itr;
+    if (name_size) {
+        *name_size -= *size;
     }
 
     itr = oijson_internal_consume_whitespace(itr, size);
@@ -476,13 +489,16 @@ static const char* oijson_internal_consume_key_value_pair(const char* itr, unsig
     }
 
     OIJSON_STEP_ITR();// skip ':'
-    if (size_value) {
-        *size_value = *size;
-    }
     if (value_start) {
         *value_start = itr;
     }
+    if (value_size) {
+        *value_size = *size;
+    }
     itr = oijson_internal_consume_value(itr, size);
+    if (value_size) {
+        *value_size -= *size;
+    }
     return itr;
 }
 
@@ -502,7 +518,7 @@ static const char* oijson_internal_consume_object(const char* itr, unsigned int*
     }
 
     while(1) {
-        itr = oijson_internal_consume_key_value_pair(itr, size, 0, 0, 0, 0);
+        itr = oijson_internal_consume_name_value_pair(itr, size, 0, 0, 0, 0);
         if (!itr) {
             return OIJSON_NULLCHAR;
         }
@@ -566,11 +582,7 @@ oijson oijson_parse(const char* string, unsigned int string_size) {
         return OIJSON_INVALID;
     }
 
-    oijson out_json = {
-        .buffer = OIJSON_NULLCHAR,
-        .size = 0,
-        .type = oijson_type_invalid
-    };
+    oijson out_json = OIJSON_INVALID;
 
     const char*(*consume_functions[])(const char*, unsigned int*) = {
         oijson_internal_consume_string,
@@ -595,7 +607,12 @@ oijson oijson_parse(const char* string, unsigned int string_size) {
     for (int i = 0; i < len; i++) {
         unsigned int temp_size = string_size;
         const char* itr = consume_functions[i](string, &temp_size);
+        unsigned int post_size = temp_size;// remainder after consumed object
+        oijson_internal_consume_whitespace(itr, &post_size);
         if (itr) {
+            if (post_size && *itr) {
+                break;
+            }
             out_json.buffer = string;
             out_json.size = string_size - temp_size;
             out_json.type = types[i];
@@ -612,42 +629,20 @@ unsigned int oijson_object_count(oijson object) {
         return 0;
     }
 
-    unsigned int size = object.size;
-    const char* itr = oijson_internal_consume_whitespace(object.buffer, &size);
-    itr = oijson_internal_consume_utf8(itr, &size);// skip '{'
-
     unsigned int count = 0;
-
-    while (1) {
-        itr = oijson_internal_consume_key_value_pair(itr, &size, 0, 0, 0, 0);
-        if (!itr) {
-            break;
-        }
-
+    oijson_iterator iterator = oijson_iterator_create(object);
+    while (iterator.type != oijson_iterator_type_invalid) {
         count++;
-
-        itr = oijson_internal_consume_whitespace(itr, &size);
-        if (!itr || *itr != ',') {
-            break;
-        }
-        itr = oijson_internal_consume_utf8(itr, &size);// skip ','
+        oijson_iterator_advance(&iterator);
     }
     return count;
 }
 
-static int oijson_internal_check_value(const char* start, const char* end, const char* name) {
-    start++;
-    end--;
+static int oijson_internal_check_value(const char* ptr, unsigned int len, const char* name) {
+    ptr++;
 
-    const char* key = start;
-    unsigned int key_size = 0;
-    {
-        const char* itr = key;
-        while (itr != end) {
-            itr++;
-            key_size++;
-        }
-    }
+    const char* key = ptr;
+    unsigned int key_size = len - 2;
 
     unsigned int name_size = 0;
     {
@@ -659,7 +654,7 @@ static int oijson_internal_check_value(const char* start, const char* end, const
     }
 
     while (key_size && name_size) {
-        char parsed_key[5] = { 0, 0, 0, 0, 0 };;
+        char parsed_key[5] = { 0, 0, 0, 0, 0 };
         char* parsed_key_ptr = parsed_key;
         unsigned int parsed_key_size = 5;
         char parsed_name[5] = { 0, 0, 0, 0, 0 };
@@ -693,29 +688,12 @@ oijson oijson_object_value_by_name(oijson object, const char* name) {
         return OIJSON_INVALID;
     }
 
-    unsigned int size = object.size;
-    const char* itr = oijson_internal_consume_whitespace(object.buffer, &size);
-    itr = oijson_internal_consume_utf8(itr, &size);// skip '{'
-
-    while (1) {
-        const char* start;
-        const char* end;
-        const char* value;
-        unsigned int temp_size;
-        itr = oijson_internal_consume_key_value_pair(itr, &size, &temp_size, &start, &end, &value);
-        if (!itr) {
-            break;
+    oijson_iterator iterator = oijson_iterator_create(object);
+    while (iterator.type != oijson_iterator_type_invalid) {
+        if (oijson_internal_check_value(iterator.name.buffer, iterator.name.size, name)) {
+            return iterator.value;
         }
-
-        if (oijson_internal_check_value(start, end, name)) {
-            return oijson_parse(value, temp_size);
-        }
-
-        itr = oijson_internal_consume_whitespace(itr, &size);
-        if (!itr || *itr != ',') {
-            break;
-        }
-        itr = oijson_internal_consume_utf8(itr, &size);// skip ','
+        oijson_iterator_advance(&iterator);
     }
     oijson_internal_error_set("name/value pair not found");
     return OIJSON_INVALID;
@@ -727,31 +705,14 @@ oijson oijson_object_value_by_index(oijson object, unsigned int index) {
         return OIJSON_INVALID;
     }
 
-    unsigned int size = object.size;
-    const char* itr = oijson_internal_consume_whitespace(object.buffer, &size);
-    itr = oijson_internal_consume_utf8(itr, &size);// skip '{'
-
-    while (1) {
-        const char* value;
-        unsigned int temp_size;
-        itr = oijson_internal_consume_key_value_pair(itr, &size, &temp_size, 0, 0, &value);
-        if (!itr) {
-            break;
-        }
-
-        if (!index) {
-            return oijson_parse(value, temp_size);
-        }
-        index--;
-
-        itr = oijson_internal_consume_whitespace(itr, &size);
-        if (!itr || *itr != ',') {
-            break;
-        }
-        itr = oijson_internal_consume_utf8(itr, &size);// skip ','
+    oijson_iterator iterator = oijson_iterator_create(object);
+    while (iterator.type != oijson_iterator_type_invalid && index--) {
+        oijson_iterator_advance(&iterator);
     }
-    oijson_internal_error_set("index out of range");
-    return OIJSON_INVALID;
+    if (iterator.type == oijson_iterator_type_invalid) {
+        oijson_internal_error_set("index out of range");
+    }
+    return iterator.value;
 }
 
 oijson oijson_object_name_by_index(oijson object, unsigned int index) {
@@ -760,29 +721,14 @@ oijson oijson_object_name_by_index(oijson object, unsigned int index) {
         return OIJSON_INVALID;
     }
 
-    unsigned int size = object.size;
-    const char* itr = oijson_internal_consume_whitespace(object.buffer, &size);
-    itr = oijson_internal_consume_utf8(itr, &size);// skip '{'
-
-    while (1) {
-        if (!index) {
-            return oijson_parse(itr, size);
-        }
-        index--;
-
-        itr = oijson_internal_consume_key_value_pair(itr, &size, 0, 0, 0, 0);
-        if (!itr) {
-            break;
-        }
-
-        itr = oijson_internal_consume_whitespace(itr, &size);
-        if (!itr || *itr != ',') {
-            break;
-        }
-        itr = oijson_internal_consume_utf8(itr, &size);// skip ','
+    oijson_iterator iterator = oijson_iterator_create(object);
+    while (iterator.type != oijson_iterator_type_invalid && index--) {
+        oijson_iterator_advance(&iterator);
     }
-    oijson_internal_error_set("index out of range");
-    return OIJSON_INVALID;
+    if (iterator.type == oijson_iterator_type_invalid) {
+        oijson_internal_error_set("index out of range");
+    }
+    return iterator.name;
 }
 
 
@@ -792,25 +738,11 @@ unsigned int oijson_array_count(oijson array) {
         return 0;
     }
 
-    unsigned int size = array.size;
-    const char* itr = oijson_internal_consume_whitespace(array.buffer, &size);
-    itr = oijson_internal_consume_utf8(itr, &size);// skip '['
-
     unsigned int count = 0;
-
-    while (1) {
-        itr = oijson_internal_consume_value(itr, &size);
-        if (!itr) {
-            break;
-        }
-
+    oijson_iterator iterator = oijson_iterator_create(array);
+    while (iterator.type != oijson_iterator_type_invalid) {
         count++;
-
-        itr = oijson_internal_consume_whitespace(itr, &size);
-        if (!itr || *itr != ',') {
-            break;
-        }
-        itr = oijson_internal_consume_utf8(itr, &size);// skip ','
+        oijson_iterator_advance(&iterator);
     }
     return count;
 }
@@ -821,29 +753,14 @@ oijson oijson_array_value_by_index(oijson array, unsigned int index) {
         return OIJSON_INVALID;
     }
 
-    unsigned int size = array.size;
-    const char* itr = oijson_internal_consume_whitespace(array.buffer, &size);
-    itr = oijson_internal_consume_utf8(itr, &size);// skip '['
-
-    while (1) {
-        if (!index) {
-            return oijson_parse(itr, size);
-        }
-        index--;
-
-        itr = oijson_internal_consume_value(itr, &size);
-        if (!itr) {
-            break;
-        }
-
-        itr = oijson_internal_consume_whitespace(itr, &size);
-        if (!itr || *itr != ',') {
-            break;
-        }
-        itr = oijson_internal_consume_utf8(itr, &size);// skip ','
+    oijson_iterator iterator = oijson_iterator_create(array);
+    while (iterator.type != oijson_iterator_type_invalid && index--) {
+        oijson_iterator_advance(&iterator);
     }
-    oijson_internal_error_set("index out of range");
-    return OIJSON_INVALID;
+    if (iterator.type == oijson_iterator_type_invalid) {
+        oijson_internal_error_set("index out of range");
+    }
+    return iterator.value;
 }
 
 static int oijson_internal_formatted_value(oijson value, char** out_ptr, unsigned int* out_size_ptr);
@@ -853,14 +770,9 @@ static int oijson_internal_formatted_object(oijson object, char** out_ptr, unsig
         return 0;
     }
 
-    unsigned int count = oijson_object_count(object);
-    for (unsigned int i = 0; i < count; i++) {
-        if (i != 0 && !oijson_internal_push_char(out_ptr, out_size_ptr, ',')) {
-            return 0;
-        }
-
-        oijson name = oijson_object_name_by_index(object, i);
-        if (!oijson_internal_formatted_value(name, out_ptr, out_size_ptr)) {
+    oijson_iterator iterator = oijson_iterator_create(object);
+    while (iterator.type != oijson_iterator_type_invalid) {
+        if (!oijson_internal_formatted_value(iterator.name, out_ptr, out_size_ptr)) {
             return 0;
         }
 
@@ -868,11 +780,18 @@ static int oijson_internal_formatted_object(oijson object, char** out_ptr, unsig
             return 0;
         }
 
-        oijson value = oijson_object_value_by_index(object, i);
-        if (!oijson_internal_formatted_value(value, out_ptr, out_size_ptr)) {
+        if (!oijson_internal_formatted_value(iterator.value, out_ptr, out_size_ptr)) {
             return 0;
         }
+
+        oijson_iterator_advance(&iterator);
+        if (iterator.type != oijson_iterator_type_invalid) {
+            if (!oijson_internal_push_char(out_ptr, out_size_ptr, ',')) {
+                return 0;
+            }
+        }
     }
+
     return oijson_internal_push_char(out_ptr, out_size_ptr, '}');
 }
 
@@ -881,17 +800,19 @@ static int oijson_internal_formatted_array(oijson array, char** out_ptr, unsigne
         return 0;
     }
 
-    unsigned int count = oijson_array_count(array);
-    for (unsigned int i = 0; i < count; i++) {
-        if (i != 0 && !oijson_internal_push_char(out_ptr, out_size_ptr, ',')) {
+    oijson_iterator iterator = oijson_iterator_create(array);
+    while (iterator.type != oijson_iterator_type_invalid) {
+        if (!oijson_internal_formatted_value(iterator.value, out_ptr, out_size_ptr)) {
             return 0;
         }
-
-        oijson value = oijson_array_value_by_index(array, i);
-        if (!oijson_internal_formatted_value(value, out_ptr, out_size_ptr)) {
-            return 0;
+        oijson_iterator_advance(&iterator);
+        if (iterator.type != oijson_iterator_type_invalid) {
+            if (!oijson_internal_push_char(out_ptr, out_size_ptr, ',')) {
+                return 0;
+            }
         }
     }
+
     return oijson_internal_push_char(out_ptr, out_size_ptr, ']');
 }
 
@@ -935,6 +856,10 @@ static int oijson_internal_formatted_value(oijson value, char** out_ptr, unsigne
 }
 
 int oijson_value_formatted(oijson value, char* out, unsigned int out_size) {
+    if (!oijson_internal_pre_truncate(&out, &out_size)) {
+        return 0;
+    }
+
     if (value.type == oijson_type_invalid) {
         oijson_internal_error_set("value is not valid");
         return 0;
@@ -943,10 +868,14 @@ int oijson_value_formatted(oijson value, char* out, unsigned int out_size) {
     if (!oijson_internal_formatted_value(value, &out, &out_size)) {
         return 0;
     }
-    return oijson_internal_push_char(&out, &out_size, '\0');
+    return out_size ? oijson_internal_push_char(&out, &out_size, '\0') : 1;
 }
 
 int oijson_value_as_string(oijson value, char* out, unsigned int out_size) {
+    if (!oijson_internal_pre_truncate(&out, &out_size)) {
+        return 0;
+    }
+
     if (value.type != oijson_type_string) {
         oijson_internal_error_set("value is not a string");
         return 0;
@@ -960,7 +889,7 @@ int oijson_value_as_string(oijson value, char* out, unsigned int out_size) {
             return 0;
         }
     } while (*itr != '\"');
-    return oijson_internal_push_char(&out, &out_size, '\0');
+    return out_size ? oijson_internal_push_char(&out, &out_size, '\0') : 1;
 }
 
 static const char* oijson_internal_parse_ull(const char* string, unsigned int string_size, unsigned long long* out) {
@@ -1165,4 +1094,91 @@ int oijson_value_as_int(oijson value, int* out) {
         return 1;
     }
     return 0;
+}
+
+static void oijson_internal_iterator_invalidate(oijson_iterator* iterator) {
+    *iterator = (oijson_iterator) {
+        .type = oijson_iterator_type_invalid,
+        .name = OIJSON_INVALID,
+        .value = OIJSON_INVALID,
+        .ptr = OIJSON_NULLCHAR,
+        .size = 0,
+    };
+}
+
+static void oijson_internal_iterator_update(oijson_iterator* iterator) {
+    switch (iterator->type) {
+        case oijson_iterator_type_object:
+            {
+                const char* name_start;
+                unsigned int name_size;
+                const char* value_start;
+                unsigned int value_size;
+                unsigned int temp_size = iterator->size;
+
+                const char* itr = oijson_internal_consume_name_value_pair(iterator->ptr, &temp_size, &name_start, &name_size, &value_start, &value_size);
+                if (!itr) {
+                    oijson_internal_iterator_invalidate(iterator);
+                    return;
+                }
+
+                iterator->name = oijson_parse(name_start, name_size);
+                iterator->value = oijson_parse(value_start, value_size);
+            }
+            break;
+        case oijson_iterator_type_array:
+            {
+                const char* value_start = iterator->ptr;
+                unsigned int value_size = iterator->size;
+                const char* itr = oijson_internal_consume_value(iterator->ptr, &value_size);
+                if (!itr) {
+                    oijson_internal_iterator_invalidate(iterator);
+                    return;
+                }
+                value_size = iterator->size - value_size;
+
+                iterator->name = OIJSON_INVALID;
+                iterator->value = oijson_parse(value_start, value_size);
+            }
+            break;
+        default:
+            oijson_internal_iterator_invalidate(iterator);
+            break;
+    }
+}
+
+oijson_iterator oijson_iterator_create(oijson value) {
+    oijson_iterator iterator;
+    oijson_internal_iterator_invalidate(&iterator);
+
+    if (value.type == oijson_type_object) {
+        iterator.type = oijson_iterator_type_object;
+        iterator.size = value.size;
+        iterator.ptr = oijson_internal_consume_whitespace(value.buffer, &iterator.size);
+        iterator.ptr = oijson_internal_consume_utf8(value.buffer, &iterator.size);// skip '{'
+    }
+    else if (value.type == oijson_type_array) {
+        iterator.type = oijson_iterator_type_array;
+        iterator.size = value.size;
+        iterator.ptr = oijson_internal_consume_whitespace(value.buffer, &iterator.size);
+        iterator.ptr = oijson_internal_consume_utf8(value.buffer, &iterator.size);// skip '['
+    }
+    oijson_internal_iterator_update(&iterator);
+    return iterator;
+}
+
+void oijson_iterator_advance(oijson_iterator* iterator) {
+    switch (iterator->type) {
+        case oijson_iterator_type_object:
+            iterator->ptr = oijson_internal_consume_name_value_pair(iterator->ptr, &iterator->size, 0, 0, 0, 0);
+            iterator->ptr = oijson_internal_consume_utf8(iterator->ptr, &iterator->size);// ','
+            break;
+        case oijson_iterator_type_array:
+            iterator->ptr = oijson_internal_consume_value(iterator->ptr, &iterator->size);
+            iterator->ptr = oijson_internal_consume_utf8(iterator->ptr, &iterator->size);// ','
+            break;
+        default:
+            break;
+    }
+    oijson_internal_iterator_update(iterator);
 }

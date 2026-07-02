@@ -233,8 +233,10 @@ void check_test(int test_result, int expected_result) {
     puts("[FAILED]");
 }
 
+#define CHECK_TEST(test_result, expected_result) do { printf("(Ln %d)", __LINE__); check_test(test_result, expected_result); } while(0)
+
 void print_test_results(const char* tag, int passed, int total) {
-    printf("\nTEST RESULTS(%s): %.2d/%.2d passed(%d failed)\n", tag, passed, total, total - passed);
+    printf("\nTEST RESULTS(%s): %.2d/%.2d passed(%d failed)\n\n", tag, passed, total, total - passed);
 }
 
 void report_partial_tests(const char* tag) {
@@ -249,46 +251,51 @@ int main(int argc, char* argv[]) {
 
     char buf[2048];
     {
+        const char str[] = "{} invalid";
+        oijson json = oijson_parse(str, sizeof(str));
+        CHECK_TEST(json.type == oijson_type_invalid, 1);
+    }
+    {
         const char* file = read_file("./res/test.json", buf, 2048);
         oijson json = oijson_parse(file, string_length(file));
-        check_test(json.type != oijson_type_invalid, 1);
-        check_test(oijson_object_count(json) == 8, 1);
+        CHECK_TEST(json.type != oijson_type_invalid, 1);
+        CHECK_TEST(oijson_object_count(json) == 8, 1);
 
-        check_test(test_json_type("\"abc\"", oijson_type_string), 1);
-        check_test(test_json_type("\"\\udead\"", oijson_type_invalid), 1);
+        CHECK_TEST(test_json_type("\"abc\"", oijson_type_string), 1);
+        CHECK_TEST(test_json_type("\"\\udead\"", oijson_type_invalid), 1);
 
-        check_test(test_json_type("true", oijson_type_true), 1);
-        check_test(test_json_type("false", oijson_type_false), 1);
-        check_test(test_json_type("null", oijson_type_null), 1);
+        CHECK_TEST(test_json_type("true", oijson_type_true), 1);
+        CHECK_TEST(test_json_type("false", oijson_type_false), 1);
+        CHECK_TEST(test_json_type("null", oijson_type_null), 1);
 
-        check_test(test_json_type("1", oijson_type_number), 1);
-        check_test(test_json_type("1.2", oijson_type_number), 1);
-        check_test(test_json_type("1.2e3", oijson_type_number), 1);
-        check_test(test_json_type("01.2e3", oijson_type_invalid), 1);// leading zero
+        CHECK_TEST(test_json_type("1", oijson_type_number), 1);
+        CHECK_TEST(test_json_type("1.2", oijson_type_number), 1);
+        CHECK_TEST(test_json_type("1.2e3", oijson_type_number), 1);
+        CHECK_TEST(test_json_type("01.2e3", oijson_type_invalid), 1);// leading zero
 
-        check_test(test_json_type("{}", oijson_type_object), 1);
-        check_test(test_json_type("{,}", oijson_type_invalid), 1);
-        check_test(test_json_type("{\"a\":0}", oijson_type_object), 1);
-        check_test(test_json_type("{\"a\":0,\"b\":1}", oijson_type_object), 1);
-        check_test(test_json_type("{\"a\":0,\"b\":1,}", oijson_type_invalid), 1);
-        check_test(test_json_type("{\"a\"0}", oijson_type_invalid), 1);
+        CHECK_TEST(test_json_type("{}", oijson_type_object), 1);
+        CHECK_TEST(test_json_type("{,}", oijson_type_invalid), 1);
+        CHECK_TEST(test_json_type("{\"a\":0}", oijson_type_object), 1);
+        CHECK_TEST(test_json_type("{\"a\":0,\"b\":1}", oijson_type_object), 1);
+        CHECK_TEST(test_json_type("{\"a\":0,\"b\":1,}", oijson_type_invalid), 1);// trailing comma
+        CHECK_TEST(test_json_type("{\"a\"0}", oijson_type_invalid), 1);
 
-        check_test(test_json_type("[]", oijson_type_array), 1);
-        check_test(test_json_type("[,]", oijson_type_invalid), 1);
-        check_test(test_json_type("[0,1,2]", oijson_type_array), 1);
-        check_test(test_json_type("[0,1,2,]", oijson_type_invalid), 1);
-        check_test(test_json_type("[0,1,2", oijson_type_invalid), 1);
+        CHECK_TEST(test_json_type("[]", oijson_type_array), 1);
+        CHECK_TEST(test_json_type("[,]", oijson_type_invalid), 1);
+        CHECK_TEST(test_json_type("[0,1,2]", oijson_type_array), 1);
+        CHECK_TEST(test_json_type("[0,1,2,]", oijson_type_invalid), 1);// trailing comma
+        CHECK_TEST(test_json_type("[0,1,2", oijson_type_invalid), 1);
 
         report_partial_tests("object");
 
         if (json.type != oijson_type_invalid) {
             print_json(json);
-            check_test(test_value_by_name(json, "float2", "10.0e-10"), 1);
-            check_test(test_value_by_name(json, "float\\u0032", "10.0e-10"), 1);
-            check_test(test_value_by_name(json, "float3", "-10.0e2"), 1);
-            check_test(test_value_by_name(json, "float\\u0033", "-10.0e2"), 1);
-            check_test(test_value_by_name(json, "float4", "not found"), 0);
-            check_test(test_value_by_name(json, "float\\u0034", "not found"), 0);
+            CHECK_TEST(test_value_by_name(json, "float2", "10.0e-10"), 1);
+            CHECK_TEST(test_value_by_name(json, "float\\u0032", "10.0e-10"), 1);
+            CHECK_TEST(test_value_by_name(json, "float3", "-10.0e2"), 1);
+            CHECK_TEST(test_value_by_name(json, "float\\u0033", "-10.0e2"), 1);
+            CHECK_TEST(test_value_by_name(json, "float4", "not found"), 0);
+            CHECK_TEST(test_value_by_name(json, "float\\u0034", "not found"), 0);
 
             report_partial_tests("value by name");
         }
@@ -298,80 +305,148 @@ int main(int argc, char* argv[]) {
         print_json(json3);
     }
 
-    check_test(test_double("0", "0.000000"), 1);
-    check_test(test_double("-0", "0.000000"), 1);
-    check_test(test_double("0.12345", "0.123450"), 1);
-    check_test(test_double("-0.12345", "-0.123450"), 1);
-    check_test(test_double("10.5e7", "105000000.000000"), 1);
-    check_test(test_double("-10.5e7", "-105000000.000000"), 1);
-    check_test(test_double("10.5e-3", "0.010500"), 1);
-    check_test(test_double("-10.5e-3", "-0.010500"), 1);
+    CHECK_TEST(test_double("0", "0.000000"), 1);
+    CHECK_TEST(test_double("-0", "0.000000"), 1);
+    CHECK_TEST(test_double("0.12345", "0.123450"), 1);
+    CHECK_TEST(test_double("-0.12345", "-0.123450"), 1);
+    CHECK_TEST(test_double("10.5e7", "105000000.000000"), 1);
+    CHECK_TEST(test_double("-10.5e7", "-105000000.000000"), 1);
+    CHECK_TEST(test_double("10.5e-3", "0.010500"), 1);
+    CHECK_TEST(test_double("-10.5e-3", "-0.010500"), 1);
 
     report_partial_tests("double conversion");
 
-    check_test(test_long("0", "0"), 1);
-    check_test(test_long("-0", "0"), 1);
-    check_test(test_long("0.5", "0"), 1);
-    check_test(test_long("0.51", "1"), 1);
-    check_test(test_long("-0.5", "0"), 1);
-    check_test(test_long("-0.51", "-1"), 1);
-    check_test(test_long("10.51e7", "110000000"), 1);
-    check_test(test_long("-10.51e7", "-110000000"), 1);
-    check_test(test_long("19.5e-1", "1"), 1);
-    check_test(test_long("-19.5e-1", "-1"), 1);
-    check_test(test_long("19.51e-1", "2"), 1);
-    check_test(test_long("-19.51e-1", "-2"), 1);
+    CHECK_TEST(test_long("0", "0"), 1);
+    CHECK_TEST(test_long("-0", "0"), 1);
+    CHECK_TEST(test_long("0.5", "0"), 1);
+    CHECK_TEST(test_long("0.51", "1"), 1);
+    CHECK_TEST(test_long("-0.5", "0"), 1);
+    CHECK_TEST(test_long("-0.51", "-1"), 1);
+    CHECK_TEST(test_long("10.51e7", "110000000"), 1);
+    CHECK_TEST(test_long("-10.51e7", "-110000000"), 1);
+    CHECK_TEST(test_long("19.5e-1", "1"), 1);
+    CHECK_TEST(test_long("-19.5e-1", "-1"), 1);
+    CHECK_TEST(test_long("19.51e-1", "2"), 1);
+    CHECK_TEST(test_long("-19.51e-1", "-2"), 1);
 
     report_partial_tests("long conversion");
 
     {
         char string[10];
-        check_test(test_string("\"ab\\nc\"", "ab\nc", string, 10), 1);// success - c is printed in newline
-        check_test(test_string("\"ab\\nc\"", "buffer too small", string, 4), 0);// fails - no space for null terminator
+        CHECK_TEST(test_string("\"ab\\nc\"", "ab\nc", string, 10), 1);// success - c is printed in newline
+        CHECK_TEST(test_string("\"ab\\nc\"", "buffer too small", string, 4), 0);// fails - no space for null terminator
 
-        check_test(test_string("\"\\u002F\"", "/", string, 5), 1);// success - prints /
-        check_test(test_string("\"/\"", "/", string, 5), 1);// success - prints /
-        check_test(test_string("\"\\/\"", "/", string, 5), 1);// success - prints /
+        CHECK_TEST(test_string("\"\\u002F\"", "/", string, 5), 1);// success - prints /
+        CHECK_TEST(test_string("\"/\"", "/", string, 5), 1);// success - prints /
+        CHECK_TEST(test_string("\"\\/\"", "/", string, 5), 1);// success - prints /
 
-        check_test(test_string("\"\\uD834\\uDD1E\"", "𝄞", string, 10), 1);
-        check_test(test_string("\"\\udead\"", "invalid escaped unicode", string, 10), 0);// should fail because of invalid escaped unicode
-        check_test(test_string("\"\\uffff\\uffff\"", "invalid escaped unicode", string, 10), 0);// should fail because of invalid escaped unicode
-        check_test(test_string("\"\\\n\"", "invalid escaped control character", string, 10), 0);// should fail because of invalid escaped unicode
-        check_test(test_string("\"\n\"", "unescaped control character", string, 10), 0);// should fail because of invalid escaped unicode
+        CHECK_TEST(test_string("\"\\uD834\\uDD1E\"", "𝄞", string, 10), 1);
+        CHECK_TEST(test_string("\"\\udead\"", "invalid escaped unicode", string, 10), 0);// should fail because of invalid escaped unicode
+        CHECK_TEST(test_string("\"\\uffff\\uffff\"", "invalid escaped unicode", string, 10), 0);// should fail because of invalid escaped unicode
+        CHECK_TEST(test_string("\"\\\n\"", "invalid escaped control character", string, 10), 0);// should fail because of invalid escaped unicode
+        CHECK_TEST(test_string("\"\n\"", "unescaped control character", string, 10), 0);// should fail because of invalid escaped unicode
 
         report_partial_tests("string escaping");
     }
 
     {
-        check_test(test_formatted2("\"string\"", "\"string\""), 1);// success - actual string
-        check_test(test_formatted2(" \"string\" ", "\"string\""), 1);// success - actual string (extra spacing)
-        check_test(test_formatted2("0", "0"), 1);// success - number
-        check_test(test_formatted2(" 0 ", "0"), 1);// success - number (extra spacing)
-        check_test(test_formatted2("1.0e2", "1.0e2"), 1);// success - number
-        check_test(test_formatted2(" 1.0e2 ", "1.0e2"), 1);// success - number (extra spacing)
+        CHECK_TEST(test_formatted2("\"string\"", "\"string\""), 1);// success - actual string
+        CHECK_TEST(test_formatted2(" \"string\" ", "\"string\""), 1);// success - actual string (extra spacing)
+        CHECK_TEST(test_formatted2("0", "0"), 1);// success - number
+        CHECK_TEST(test_formatted2(" 0 ", "0"), 1);// success - number (extra spacing)
+        CHECK_TEST(test_formatted2("1.0e2", "1.0e2"), 1);// success - number
+        CHECK_TEST(test_formatted2(" 1.0e2 ", "1.0e2"), 1);// success - number (extra spacing)
 
-        check_test(test_formatted2("{}", "{}"), 1);// success - empty object
-        check_test(test_formatted2(" { } ", "{}"), 1);// success - empty object (extra spacing)
-        check_test(test_formatted2(" { \"val\" : \"a b\" } ", "{\"val\":\"a b\"}"), 1);// success - simple object
-        check_test(test_formatted2(" { \"val\" : \"a b\", \"other\" : 0.0 } ", "{\"val\":\"a b\",\"other\":0.0}"), 1);// success - less simple object
+        report_partial_tests("formatted strings and numbers");
 
-        check_test(test_formatted2("[]", "[]"), 1);// success - empty array
-        check_test(test_formatted2(" [ ] ", "[]"), 1);// success - empty array (extra spacing)
-        check_test(test_formatted2(" [ \"my value\" ] ", "[\"my value\"]"), 1);// success - simple array
-        check_test(test_formatted2(" [ \"my value\", \"other value\" ] ", "[\"my value\",\"other value\"]"), 1);// success - less simple array
-        check_test(test_formatted2(" [ \"my value\", true, 0 ] ", "[\"my value\",true,0]"), 1);// success - less simple array with mixed types
+        CHECK_TEST(test_formatted2("{}", "{}"), 1);// success - empty object
+        CHECK_TEST(test_formatted2(" { } ", "{}"), 1);// success - empty object (extra spacing)
+        CHECK_TEST(test_formatted2(" { \"val\" : \"a b\" } ", "{\"val\":\"a b\"}"), 1);// success - simple object
+        CHECK_TEST(test_formatted2(" { \"val\" : \"a b\", \"other\" : 0.0 } ", "{\"val\":\"a b\",\"other\":0.0}"), 1);// success - less simple object
 
-        check_test(test_formatted2("true", "true"), 1);// success - true
-        check_test(test_formatted2(" true ", "true"), 1);// success - true (extra spacing)
-        check_test(test_formatted2("false", "false"), 1);// success - false
-        check_test(test_formatted2(" false ", "false"), 1);// success - false (extra spacing)
-        check_test(test_formatted2("null", "null"), 1);// success - null
-        check_test(test_formatted2(" null ", "null"), 1);// success - null (extra spacing)
+        report_partial_tests("formatted objects");
 
-        check_test(test_formatted2(" \"\\uD834\\uDD1E\" ", "\"𝄞\""), 1);
-        check_test(test_formatted2(" \"𝄞\" ", "\"𝄞\""), 1);
+        CHECK_TEST(test_formatted2("[]", "[]"), 1);// success - empty array
+        CHECK_TEST(test_formatted2(" [ ] ", "[]"), 1);// success - empty array (extra spacing)
+        CHECK_TEST(test_formatted2(" [ \"my value\" ] ", "[\"my value\"]"), 1);// success - simple array
+        CHECK_TEST(test_formatted2(" [ \"my value\", \"other value\" ] ", "[\"my value\",\"other value\"]"), 1);// success - less simple array
+        CHECK_TEST(test_formatted2(" [ \"my value\", true, 0 ] ", "[\"my value\",true,0]"), 1);// success - less simple array with mixed types
+
+        report_partial_tests("formatted arrays");
+
+        CHECK_TEST(test_formatted2("true", "true"), 1);// success - true
+        CHECK_TEST(test_formatted2(" true ", "true"), 1);// success - true (extra spacing)
+        CHECK_TEST(test_formatted2("false", "false"), 1);// success - false
+        CHECK_TEST(test_formatted2(" false ", "false"), 1);// success - false (extra spacing)
+        CHECK_TEST(test_formatted2("null", "null"), 1);// success - null
+        CHECK_TEST(test_formatted2(" null ", "null"), 1);// success - null (extra spacing)
+
+        CHECK_TEST(test_formatted2(" \"\\uD834\\uDD1E\" ", "\"𝄞\""), 1);
+        CHECK_TEST(test_formatted2(" \"𝄞\" ", "\"𝄞\""), 1);
 
         report_partial_tests("formatted values");
+    }
+
+    {// ARRAY ITERATOR
+        const char array_str[] = "[\"abc\",0,{\"a\":null},[0,1],true,false,null]";
+        oijson_type array_types[] = {
+            oijson_type_string,
+            oijson_type_number,
+            oijson_type_object,
+            oijson_type_array,
+            oijson_type_true,
+            oijson_type_false,
+            oijson_type_null,
+        };
+        oijson array = oijson_parse(array_str, sizeof(array_str));
+        oijson_iterator array_iterator = oijson_iterator_create(array);
+        for (unsigned int i = 0; i < sizeof(array_types) / sizeof(array_types[0]); i++) {
+            CHECK_TEST(array_iterator.value.type == array_types[i], 1);
+            oijson_iterator_advance(&array_iterator);
+        }
+        for (unsigned int i = 0; i < sizeof(array_types) / sizeof(array_types[0]); i++) {
+            oijson value = oijson_array_value_by_index(array, i);
+            CHECK_TEST(value.type == array_types[i], 1);
+        }
+        report_partial_tests("array iterator");
+    }
+
+    {// OBJECT ITERATOR
+        const char object_str[] = "{\"a\":\"abc\",\"b\":0,\"c\":{\"a\":null},\"d\":[0,1],\"e\":true,\"f\":false,\"g\":null}";
+        oijson_type object_types[] = {
+            oijson_type_string,
+            oijson_type_number,
+            oijson_type_object,
+            oijson_type_array,
+            oijson_type_true,
+            oijson_type_false,
+            oijson_type_null,
+        };
+        const char* object_names[] = {
+            "a",
+            "b",
+            "c",
+            "d",
+            "e",
+            "f",
+            "g",
+        };
+        oijson object = oijson_parse(object_str, sizeof(object_str));
+        oijson_iterator object_iterator = oijson_iterator_create(object);
+        for (unsigned int i = 0; i < sizeof(object_types) / sizeof(object_types[0]); i++) {
+            CHECK_TEST(object_iterator.name.type == oijson_type_string, 1);
+            CHECK_TEST(object_iterator.value.type == object_types[i], 1);
+            oijson_iterator_advance(&object_iterator);
+        }
+        for (unsigned int i = 0; i < sizeof(object_types) / sizeof(object_types[0]); i++) {
+            char n[3];
+            oijson name = oijson_object_name_by_index(object, i);
+            oijson_value_as_string(name, n, 3);
+            CHECK_TEST(string_equal(n, object_names[i]), 1);
+            oijson value = oijson_object_value_by_index(object, i);
+            CHECK_TEST(value.type == object_types[i], 1);
+        }
+        report_partial_tests("object iterator");
     }
 
     print_test_results("TOTAL", tests_passed, tests_count);

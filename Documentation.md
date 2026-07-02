@@ -1,6 +1,6 @@
 # OIJSON Documentation
 
-OIJSON is supposed to be simple, with as little types and functions as needed. Therefore, it should be easy to learn to use the library by, well, *using the library*. That said, this single page documentation attempts to be a clarifying resource, when the code itself is not intuitive enough.
+OIJSON is supposed to be simple, with as little types and functions as needed. This single page documentation attempts to be a clarifying resource, when the code itself is not intuitive enough.
 
 # Enums
 
@@ -20,6 +20,18 @@ The type of a JSON value. *oijson_type_invalid* does not direcly map to a JSON t
 |oijson_type_null    |null      |
 
 <br>
+
+### oijson_iterator_type
+
+The type of an iterator. *oijson_iterator_type_invalid* indicates an invalid iterator. An iterator will be invalid if the [oijson](#oijson) value it is iterating is not an object nor an array. An interator will also become invalid once it reaches the end of an object or array, or if the object or array is empty.
+
+|Value                        |Description |
+|:----------------------------|:--------   |
+|oijson_iterator_type_invalid | Type of an iterator that was created incorrectly, has reached the end of an object or array, or is iterating over an empty object or array |
+|oijson_iterator_type_object  | Type of an iterator that was created with an object. Fields name and value may be accessed. |
+|oijson_iterator_type_array   | Type of an iterator that was created with an array. The field value may be accessed, while the field name will always be of [type](#oijson_type) *oijson_type_invalid*. |
+
+<br>
 <br>
 
 # Structs
@@ -33,6 +45,20 @@ Represents a JSON object, containg a reference to the raw JSON string as well as
 |buffer | const char*  | Read-only. Pointer to the start of the object in the buffer provided in [oijson_parse](#oijson_parse). External modifications to this buffer may invalidate the object. |
 |size   | unsigned int | Read-only. The size, in bytes, of the JSON string representing the object, including whitespace. |
 |type   | type         | Read-only. The oijson_type of the JSON object. |
+
+<br>
+
+### oijson_iterator
+
+Represents a JSON object, containg a reference to the raw JSON string as well as its length. To get usable data types from an oijson, use the [value functions](#Functions). The contents of **buffer** should NOT be modified externally, as doing so may invalidate the JSON object and lead to undesired behaviour.
+
+|Field  |Type                  |Description        |
+|:------|:---------------------|:------------------|
+|type   | oijson_iterator_type | Read-only. Type of the iterator. If other than *oijson_iterator_type*, the fields name and value may be acessed. |
+|name   | oijson               | Read-only. The name field for iterators of type *oijson_iterator_type_object*. |
+|value  | oijson               | Read-only. The name field for iterators of type *oijson_iterator_type_object* or *oijson_iterator_type_array*. |
+|ptr    | const char*          | Read-only. Pointer to object or array data. Used internally. |
+|size   | unsigned int         | Read-only. Size of object or array data. Used internally. |
 
 <br>
 <br>
@@ -57,6 +83,9 @@ Represents a JSON object, containg a reference to the raw JSON string as well as
     - [oijson_value_as_int](#oijson_value_as_int)
     - [oijson_value_as_double](#oijson_value_as_double)
     - [oijson_value_as_float](#oijson_value_as_float)
+- Iterators
+    - [oijson_iterator_create](#oijson_iterator_create)
+    - [oijson_iterator_advance](#oijson_iterator_advance)
 
 <br>
 
@@ -101,8 +130,8 @@ oijson oijson_object_value_by_name(oijson object, const char* name)
 ```
 Returns the value of the name/value pair called **name** as an [oijson](#oijson). If **object** is not of [type](#oijson_type) *oijson_type_object* or does not contain a name/value pair called **name**, returns an empty [oijson](#oijson) of [type](#oijson_type) *oijson_type_invalid*.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |object    |[oijson](#oijson) | The JSON object. This must be of [type](#oijson_type) *oijson_type_object*. |
 |name      |const char*| The name of the value to query. |
 
@@ -114,8 +143,8 @@ oijson oijson_object_name_by_index(oijson object, unsigned int index)
 ```
 Returns the name of the name/value pair at **index** as an [oijson](#oijson) of type *oijson_type_string*. If **object** is not of [type](#oijson_type) *oijson_type_object* or if **index** is out of bounds, returns an empty [oijson](#oijson) of [type](#oijson_type) *oijson_type_invalid*.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |object    |[oijson](#oijson) | The JSON object. This must be of [type](#oijson_type) *oijson_type_object*. |
 |index     |unsigned int | The index of the name to query. |
 
@@ -125,10 +154,10 @@ Returns the name of the name/value pair at **index** as an [oijson](#oijson) of 
 ```C
 oijson oijson_object_value_by_index(oijson object, unsigned int index)
 ```
-Returns the value of the name/value pair at **index** as an [oijson](#oijson). If **object** is not of [type](#oijson_type) *oijson_type_object* or if **index** is out of bounds, returns an empty [oijson](#oijson) o [type](#oijson_type) *oijson_type_invalid*.
+Returns the value of the name/value pair at **index** as an [oijson](#oijson). If **object** is not of [type](#oijson_type) *oijson_type_object* or if **index** is out of bounds, returns an empty [oijson](#oijson) of [type](#oijson_type) *oijson_type_invalid*.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |object    |[oijson](#oijson) | The JSON object. This must be of [type](#oijson_type) *oijson_type_object*. |
 |index     |unsigned int | The index of the value to query. |
 
@@ -141,8 +170,8 @@ unsigned int oijson_array_count(oijson array)
 
 Returns the amount of values in **array**. The [type](#oijson_type) of **array** must be *oijson_type_array*, otherwise the function will simply return 0.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |array     |[oijson](#oijson) | The JSON array. This must be of [type](#oijson_type) *oijson_type_array*. |
 
 <br>
@@ -154,8 +183,8 @@ oijson oijson_array_value_by_index(oijson array, unsigned int index)
 
 Returns the value at **index** as an [oijson](#oijson). If **array** is not of [type](#oijson_type) *oijson_type_array* or if **index** is out of bounds, returns an empty [oijson](#oijson) o [type](#oijson_type) *oijson_type_invalid*.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |object    |[oijson](#oijson) | The JSON array. This must be of [type](#oijson_type) *oijson_type_array*. |
 |index     |unsigned int | The index of the value to query. |
 
@@ -165,10 +194,10 @@ Returns the value at **index** as an [oijson](#oijson). If **array** is not of [
 ```C
 int oijson_value_formatted(oijson value, char* out, unsigned int out_size)
 ```
-Gets the **value** as a formatted UTF-8 string and copies it into **out**, removing whitespace. Returns 1 on success, or 0 if the string cannot fit into the buffer of size **out_size**. Upon success, out will contain a null terminated string.
+Gets the **value** as a formatted UTF-8 string and copies it into **out**, removing whitespace. Returns 1 on success, or 0 if the string cannot fit into the buffer of size **out_size**. Upon success, out will contain a null terminated string. If the function fails, the string will be truncated.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |value     |[oijson](#oijson) | The JSON value. |
 |out       |const char* | The buffer to which the value will be written. |
 |out_size  |unsigned int |The size of **out** in bytes. |
@@ -180,10 +209,10 @@ Gets the **value** as a formatted UTF-8 string and copies it into **out**, remov
 int oijson_value_as_string(oijson value, char* out, unsigned int out_size)
 ```
 
-Gets the **value** as a string and copies it into **out**. Returns 1 on success, or 0 if **value** is not of [type](#oijson_type) *oijson_type_string* or if the string cannot fit into the buffer of size **out_size**. Upon success, out will contain a null terminated string.
+Gets the **value** as a string and copies it into **out**. Returns 1 on success, or 0 if **value** is not of [type](#oijson_type) *oijson_type_string* or if the string cannot fit into the buffer of size **out_size**. Upon success, out will contain a null terminated string. If the function fails, the string will be truncated.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |value     |[oijson](#oijson) | The string value. This must be of [type](#oijson_type) *oijson_type_string*. |
 |out       |const char* | The buffer to which the value will be written. |
 |out_size  |unsigned int |The size of **out** in bytes. |
@@ -197,8 +226,8 @@ int oijson_value_as_long(oijson value, long* out)
 
 Gets the **value** as a long and copies it into **out**. Returns 1 on success, or 0 if **value** is not of [type](#oijson_type) *oijson_type_number*.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |value     |[oijson](#oijson) | The number value. This must be of [type](#oijson_type) *oijson_type_number*. |
 |out       |long* | Pointer to be filled in with the number value. |
 
@@ -211,8 +240,8 @@ int oijson_value_as_int(oijson value, int* out)
 
 Gets the **value** as an int and copies it into **out**. Returns 1 on success, or 0 if **value** is not of [type](#oijson_type) *oijson_type_number*.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |value     |[oijson](#oijson) | The number value. This must be of [type](#oijson_type) *oijson_type_number*. |
 |out       |int* | Pointer to be filled in with the number value. |
 
@@ -225,8 +254,8 @@ int oijson_value_as_double(oijson value, double* out)
 
 Gets the **value** as a double and copies it into **out**. Returns 1 on success, or 0 if **value** is not of [type](#oijson_type) *oijson_type_number*.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |value     |[oijson](#oijson) | The number value. This must be of [type](#oijson_type) *oijson_type_number*. |
 |out       |double* | Pointer to be filled in with the number value. |
 
@@ -239,7 +268,33 @@ int oijson_value_as_float(oijson value, float* out)
 
 Gets the **value** as a float and copies it into **out**. Returns 1 on success, or 0 if **value** is not of [type](#oijson_type) *oijson_type_number*.
 
-|Parameter |Type|Description |
-|:---------|:---|:-----------|
+|Parameter |Type |Description |
+|:---------|:----|:-----------|
 |value     |[oijson](#oijson) | The number value. This must be of [type](#oijson_type) *oijson_type_number*. |
 |out       |float* | Pointer to be filled in with the number value. |
+
+<br>
+
+### oijson_iterator_create
+```C
+oijson_iterator oijson_iterator_create(oijson value);
+```
+
+Creates an iterator for an object or array. Returns a valid *oijson_iterator* if **value** is of type *oijson_type_object* or *oijson_type_array* containing at least one item. Otherwise, returns an invalid *oijson_iterator*. The [type](#oijson_iterator_type) field should be checked to determine iterator validity.
+
+|Parameter |Type              |Description |
+|:---------|:-----------------|:-----------|
+|value     |[oijson](#oijson) | The object or array to iterate over. This must be of [type](#oijson_type) *oijson_type_object* or *oijson_type_array*. |
+
+<br>
+
+### oijson_iterator_advance
+```C
+void oijson_iterator_advance(oijson_iterator* iterator);
+```
+
+Advances the iterator to the next position. This will invalidate the iterator if it goes over the amount of values of the object or array being iterated over. If the iterator is already invalid, does nothing.
+
+|Parameter |Type                       |Description |
+|:---------|:--------------------------|:-----------|
+|value     |[oijson](#oijson_iterator) | Pointer to the iterator to be advanced. |
