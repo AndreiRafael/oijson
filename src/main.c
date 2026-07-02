@@ -340,6 +340,8 @@ int main(int argc, char* argv[]) {
         CHECK_TEST(test_string("\"/\"", "/", string, 5), 1);// success - prints /
         CHECK_TEST(test_string("\"\\/\"", "/", string, 5), 1);// success - prints /
 
+        CHECK_TEST(test_string("\"\\u0061\"", "a", string, 5), 1);// success - prints a
+        CHECK_TEST(test_string("\"\\u0061\\u0062\"", "ab", string, 5), 1);// success - prints ab
         CHECK_TEST(test_string("\"\\uD834\\uDD1E\"", "𝄞", string, 10), 1);
         CHECK_TEST(test_string("\"\\udead\"", "invalid escaped unicode", string, 10), 0);// should fail because of invalid escaped unicode
         CHECK_TEST(test_string("\"\\uffff\\uffff\"", "invalid escaped unicode", string, 10), 0);// should fail because of invalid escaped unicode

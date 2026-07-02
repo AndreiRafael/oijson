@@ -281,11 +281,11 @@ static const char* oijson_internal_parse_char(const char* itr, unsigned int* siz
                 case 'u':
                 {
                     OIJSON_STEP_ITR();
-                    unsigned char bytes[4] = { 0, 0, 0, 0};
+                    unsigned char bytes[4] = { 0, 0, 0, 0 };
                     if (!escaped_unicode_to_bytes(&itr, size, bytes, 2)) {
                         return OIJSON_NULLCHAR;
                     }
-                    if (*size >= 2) {// check sequential escaped 'u'
+                    if (*size >= 2 && bytes[2] >= 0xd8 && bytes[2] < 0xe0) {// check sequential escaped 'u'
                         if (itr[0] == '\\' && itr[1] == 'u') {
                             itr += 2;
                             (*size) -= 2;
