@@ -295,6 +295,6 @@ void oijson_iterator_advance(oijson_iterator* iterator);
 
 Advances the iterator to the next position. This will invalidate the iterator if it goes over the amount of values of the object or array being iterated over. If the iterator is already invalid, does nothing.
 
-|Parameter |Type                       |Description |
-|:---------|:--------------------------|:-----------|
-|value     |[oijson](#oijson_iterator) | Pointer to the iterator to be advanced. |
+|Parameter |Type                                 |Description |
+|:---------|:------------------------------------|:-----------|
+|value     |[oijson_iterator](#oijson_iterator)* | Pointer to the iterator to be advanced. |
