@@ -1171,10 +1171,12 @@ void oijson_iterator_advance(oijson_iterator* iterator) {
     switch (iterator->type) {
         case oijson_iterator_type_object:
             iterator->ptr = oijson_internal_consume_name_value_pair(iterator->ptr, &iterator->size, 0, 0, 0, 0);
+            iterator->ptr = oijson_internal_consume_whitespace(iterator->ptr, &iterator->size);
             iterator->ptr = oijson_internal_consume_utf8(iterator->ptr, &iterator->size);// ','
             break;
         case oijson_iterator_type_array:
             iterator->ptr = oijson_internal_consume_value(iterator->ptr, &iterator->size);
+            iterator->ptr = oijson_internal_consume_whitespace(iterator->ptr, &iterator->size);
             iterator->ptr = oijson_internal_consume_utf8(iterator->ptr, &iterator->size);// ','
             break;
         default:
