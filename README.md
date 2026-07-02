@@ -60,6 +60,3 @@ Check [Documentation.md](Documentation.md)
 
 **Large and small numbers**
 Number parsing is somewhat rudimentary and may lead to incorrect values and even C undefined behaviour when reading large numbers. Reading small numbers as int or long will also lead to absurd rounding errors. Suggestions are welcome!
-
-**Iterating**
-Iterating on items of arrays and objects is slow, and could be mitigated by introducing an actual iterator construct. 
